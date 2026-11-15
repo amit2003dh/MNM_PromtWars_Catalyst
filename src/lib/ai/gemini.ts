@@ -36,7 +36,7 @@ export async function callGemini(params: {
     throw new Error('GEMINI_API_KEY is not configured or is a placeholder.');
   }
 
-  const modelName = params.modelName || process.env.GEMINI_MODEL || 'gemini-1.5-flash';
+  const modelName = params.modelName || process.env.GEMINI_MODEL || 'gemini-3.5-flash';
   const model = client.getGenerativeModel({
     model: modelName,
     systemInstruction: params.systemInstruction,
