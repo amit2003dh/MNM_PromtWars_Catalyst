@@ -31,7 +31,7 @@ const SYMPTOMS: { id: SymptomType; label: string; icon: React.ComponentType<{ cl
 ];
 
 export default function SymptomLogger({ onSuccess, inline = false }: SymptomLoggerProps) {
-  const { logSymptom, user, seniorMode } = useCare();
+  const { logSymptom, user, careProfile, seniorMode } = useCare();
   const [selectedSymptom, setSelectedSymptom] = useState<SymptomType | null>(null);
   const [severity, setSeverity] = useState<'mild' | 'moderate' | 'severe'>('mild');
   const [notes, setNotes] = useState('');
@@ -89,7 +89,17 @@ export default function SymptomLogger({ onSuccess, inline = false }: SymptomLogg
           <label className="block text-xs font-black uppercase text-slate-400 tracking-wider mb-2">
             1. Tap your feeling / symptom
           </label>
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2.5">
+          <div
+            className={`grid ${
+              inline
+                ? seniorMode
+                  ? 'grid-cols-1 sm:grid-cols-2 gap-3'
+                  : 'grid-cols-2 gap-2.5'
+                : seniorMode
+                ? 'grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3.5'
+                : 'grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3'
+            }`}
+          >
             {SYMPTOMS.map((item) => {
               const Icon = item.icon;
               const isSelected = selectedSymptom === item.id;
@@ -98,16 +108,24 @@ export default function SymptomLogger({ onSuccess, inline = false }: SymptomLogg
                   key={item.id}
                   type="button"
                   onClick={() => setSelectedSymptom(item.id)}
-                  className={`flex flex-col items-center justify-center p-3 sm:p-4 rounded-2xl border text-center transition-all ${
-                    seniorMode ? 'min-h-[76px]' : 'min-h-[64px]'
+                  className={`flex flex-col items-center justify-center rounded-2xl border text-center transition-all min-w-0 ${
+                    seniorMode
+                      ? 'min-h-[84px] p-3.5 sm:p-4'
+                      : 'min-h-[72px] p-3'
                   } ${
                     isSelected
                       ? 'bg-nest-600 text-white border-nest-600 font-black shadow-md scale-102 ring-2 ring-nest-400'
                       : `bg-slate-50 border-slate-200 text-slate-700 font-bold ${item.color}`
                   }`}
                 >
-                  <Icon className={`w-5 h-5 mb-1.5 ${isSelected ? 'text-white' : ''}`} />
-                  <span className="text-xs sm:text-sm leading-tight">{item.label}</span>
+                  <Icon className={`shrink-0 mb-1.5 ${seniorMode ? 'w-6 h-6' : 'w-5 h-5'} ${isSelected ? 'text-white' : ''}`} />
+                  <span
+                    className={`leading-tight break-words text-center px-1 ${
+                      seniorMode ? 'text-sm sm:text-base font-bold' : 'text-xs sm:text-sm font-semibold'
+                    }`}
+                  >
+                    {item.label}
+                  </span>
                 </button>
               );
             })}
@@ -156,7 +174,7 @@ export default function SymptomLogger({ onSuccess, inline = false }: SymptomLogg
               <div className="p-3.5 rounded-2xl bg-rose-50 border border-rose-300 text-rose-900 text-xs flex items-center gap-2">
                 <AlertTriangle className="w-5 h-5 text-rose-600 shrink-0" />
                 <span>
-                  <strong>High Severity Warning:</strong> If Meera-ji is experiencing chest pain, severe breathlessness, or sudden weakness, please use the <strong>SOS Help</strong> button immediately.
+                  <strong>High Severity Warning:</strong> If {user.role === 'senior' ? 'you are' : `${careProfile.fullName} is`} experiencing chest pain, severe breathlessness, or sudden weakness, please use the <strong>SOS Help</strong> button immediately.
                 </span>
               </div>
             )}
