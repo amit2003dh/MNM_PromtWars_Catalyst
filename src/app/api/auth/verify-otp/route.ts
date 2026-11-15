@@ -108,6 +108,7 @@ export async function POST(request: Request) {
 
       // Create initial Care Recipient Profile for this household
       const initialProfileId = `cp_${Date.now()}_${crypto.randomBytes(4).toString('hex')}`;
+      const uniqueInviteCode = `CARE-${crypto.randomBytes(2).toString('hex').toUpperCase()}`;
       await profilesCol.insertOne({
         _id: initialProfileId,
         householdId,
@@ -115,6 +116,7 @@ export async function POST(request: Request) {
         preferredName: 'Senior',
         age: 70,
         gender: 'Other',
+        inviteCode: uniqueInviteCode,
         emergencyContacts: [
           { name: user!.name, relationship: 'Primary Family Contact', phone: user!.phone || '', isPrimary: true }
         ],

@@ -234,6 +234,21 @@ export async function getSession(request?: Request): Promise<AuthSession | null>
       activeProfile = await profilesCol.findOne({ _id: SEED_IDS.PROFILE_MEERA });
     }
 
+    // Ensure every careProfile has its own unique, permanent inviteCode
+    if (activeProfile && !activeProfile.inviteCode) {
+      const uniqueCode = auth.householdId === SEED_IDS.HOUSEHOLD_DEMO_MEERA 
+        ? 'NEST72' 
+        : `CARE-${(activeProfile._id || auth.householdId).replace(/[^a-zA-Z0-9]/g, '').slice(-4).toUpperCase()}`;
+      
+      try {
+        await profilesCol.updateOne(
+          { _id: activeProfile._id },
+          { $set: { inviteCode: uniqueCode } }
+        );
+        activeProfile.inviteCode = uniqueCode;
+      } catch {}
+    }
+
     const safeUser: User = {
       _id: auth.user._id,
       email: auth.user.email,

@@ -2,6 +2,7 @@
 
 import React, { useState } from 'react';
 import Sidebar from '@/components/Sidebar';
+import EmailDeliveryHub from '@/components/EmailDeliveryHub';
 import { useCare } from '@/context/CareContext';
 import {
   Settings,
@@ -162,6 +163,11 @@ export default function SettingsPage() {
             </button>
           </div>
         </form>
+
+        {/* Live Email Delivery & Automation Hub */}
+        <div className="pt-6 border-t border-slate-200/80">
+          <EmailDeliveryHub />
+        </div>
       </div>
     </div>
   );

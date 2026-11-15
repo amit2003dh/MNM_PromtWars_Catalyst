@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getCareNestDb } from '@/lib/ai/db-helper';
-import { sendStage3CaregiverEscalation } from '@/lib/email';
+import { sendStage3CaregiverEscalation, sendLowInventoryAlert } from '@/lib/email';
+import { getSession } from '@/lib/auth/session';
 import { CareProfile, Medication, DoseEvent, NotificationRecord } from '@/types';
 
 function verifyCronSecret(req: NextRequest): boolean {
@@ -43,12 +44,15 @@ export async function GET(req: NextRequest) {
 }
 
 async function handleCronReminders(req: NextRequest) {
-  // 1. Authorization check
-  if (!verifyCronSecret(req)) {
+  // 1. Authorization check: Either valid CRON_SECRET or authenticated user session
+  const session = await getSession(req);
+  const isAuthorized = verifyCronSecret(req) || Boolean(session?.user);
+
+  if (!isAuthorized) {
     return NextResponse.json(
       { 
         success: false, 
-        error: 'Unauthorized. Invalid or missing CRON_SECRET.' 
+        error: 'Unauthorized. Invalid or missing CRON_SECRET or active session.' 
       },
       { status: 401 }
     );
@@ -278,14 +282,73 @@ async function handleCronReminders(req: NextRequest) {
       }
     }
 
+    // Low Inventory Check across all active medications
+    let lowStockAlertsSent = 0;
+    for (const med of allMeds) {
+      if (med.remainingQuantity <= med.refillThreshold) {
+        const notifKey = `refill_${med._id}_${nowIso.split('T')[0]}`;
+        if (!notifKeySet.has(notifKey)) {
+          const profile = profileMap.get(med.careProfileId) || allProfiles[0];
+          const patientName = profile ? (profile.preferredName || profile.fullName) : 'Patient';
+
+          const caregiverMembers = memberships.filter(
+            m => (m.careProfileId === med.careProfileId || m.householdId === med.householdId) && 
+            (m.role === 'caregiver' || m.role === 'primary_caregiver' || m.role === 'OWNER' || m.role === 'owner')
+          );
+          let recipientEmails = caregiverMembers
+            .map(m => m.userEmail)
+            .filter((e): e is string => Boolean(e && e.includes('@')));
+
+          if (recipientEmails.length === 0 && session?.user?.email) {
+            recipientEmails = [session.user.email];
+          }
+
+          if (recipientEmails.length > 0) {
+            const emailResult = await sendLowInventoryAlert(recipientEmails, {
+              seniorName: patientName,
+              medicineName: med.medicineName,
+              remainingQuantity: med.remainingQuantity,
+              refillThreshold: med.refillThreshold,
+            });
+
+            await db.notifications.insertOne({
+              _id: `notif-refill-${med._id}-${Date.now()}`,
+              householdId: med.householdId,
+              careProfileId: med.careProfileId,
+              title: `⚠️ Low Stock Warning: ${med.medicineName}`,
+              message: `${med.medicineName} has only ${med.remainingQuantity} units remaining (Refill threshold: ${med.refillThreshold}).`,
+              type: 'refill_alert',
+              priority: 'high',
+              status: 'unread',
+              sentViaEmail: true,
+              deliveryStatus: emailResult.simulated ? 'outbox_preview' : 'sent_email',
+              createdAt: nowIso,
+            });
+
+            notifKeySet.add(notifKey);
+            lowStockAlertsSent++;
+            actions.push({
+              action: 'Dispatched low inventory alert email',
+              medicine: med.medicineName,
+              remaining: med.remainingQuantity,
+              recipients: recipientEmails,
+              simulated: emailResult.simulated,
+            });
+          }
+        }
+      }
+    }
+
     return NextResponse.json({
       success: true,
       processedAt: nowIso,
       evaluatedDosesCount: scheduledDoses.length,
+      evaluatedMedsCount: allMeds.length,
       summary: {
         stage1Created,
         stage2Created,
         stage3Escalated,
+        lowStockAlertsSent,
       },
       actions,
     });

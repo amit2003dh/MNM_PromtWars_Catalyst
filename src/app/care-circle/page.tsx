@@ -2,6 +2,7 @@
 
 import React, { useState } from 'react';
 import Sidebar from '@/components/Sidebar';
+import EmailDeliveryHub from '@/components/EmailDeliveryHub';
 import { useCare } from '@/context/CareContext';
 import {
   Users2,
@@ -13,22 +14,46 @@ import {
   PhoneCall,
   Mail,
   UserCheck,
-  HeartHandshake,
+  RotateCw,
+  Trash2,
+  Sparkles,
 } from 'lucide-react';
 
 export default function CareCirclePage() {
-  const { careProfile, careMembers, user } = useCare();
+  const { careProfile, careMembers, user, removeCareMember, refreshData } = useCare();
   const [copied, setCopied] = useState(false);
+  const [regenerating, setRegenerating] = useState(false);
   const [joinPasscode, setJoinPasscode] = useState('');
   const [joinStatus, setJoinStatus] = useState<string | null>(null);
 
-  const inviteCode = careProfile.inviteCode || 'CARE-NEST-7492';
+  // Dynamic unique invite code per household & profile
+  const inviteCode = careProfile.inviteCode || `CARE-${(careProfile._id || '7492').replace(/[^a-zA-Z0-9]/g, '').slice(-4).toUpperCase()}`;
 
   const handleCopyPasscode = () => {
     if (typeof navigator !== 'undefined') {
       navigator.clipboard.writeText(inviteCode);
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
+    }
+  };
+
+  const handleRegenerateCode = async () => {
+    setRegenerating(true);
+    try {
+      const res = await fetch('/api/care-profiles/invite-code', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ careProfileId: careProfile._id }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.inviteCode) {
+          careProfile.inviteCode = data.inviteCode;
+          await refreshData();
+        }
+      }
+    } finally {
+      setRegenerating(false);
     }
   };
 
@@ -42,15 +67,20 @@ export default function CareCirclePage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ inviteCode: joinPasscode.trim() }),
       });
+      const data = await res.json();
+
       if (res.ok) {
-        setJoinStatus('Successfully verified and joined Care Circle!');
+        setJoinStatus(`Passcode verified! Successfully connected to ${data.profile?.fullName || 'Care Circle'}.`);
+        await refreshData();
       } else {
-        setJoinStatus('Passcode verified! Connected to Meera Sharma’s Care Circle.');
+        setJoinStatus(data.error || 'Invalid passcode. Please verify the code.');
       }
     } catch {
-      setJoinStatus('Passcode verified! Connected to Meera Sharma’s Care Circle.');
+      setJoinStatus('Network error verifying passcode.');
     }
   };
+
+  const patientDisplayName = careProfile.preferredName || careProfile.fullName;
 
   return (
     <div className="flex-1 flex bg-[#FBFBF9]">
@@ -69,13 +99,13 @@ export default function CareCirclePage() {
               </span>
             </div>
             <h1 className="text-2xl sm:text-3xl font-black text-navy-950 mt-1">
-              Meera-ji&apos;s Care Circle & Permissions
+              {patientDisplayName}&apos;s Care Circle & Permissions
             </h1>
           </div>
         </div>
 
-        {/* Invite Passcode Banner */}
-        <div className="rounded-3xl bg-gradient-to-r from-nest-50 to-teal-50 border border-nest-200/90 p-6 shadow-xs flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
+        {/* Dynamic Invite Passcode Banner */}
+        <div className="rounded-3xl bg-gradient-to-r from-nest-50 to-teal-50 border border-nest-200/90 p-5 sm:p-6 shadow-xs flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
           <div className="space-y-1">
             <div className="flex items-center gap-2 text-xs font-black uppercase tracking-wider text-nest-800">
               <KeyRound className="w-4 h-4" />
@@ -85,22 +115,33 @@ export default function CareCirclePage() {
               Share this code with doctors, nurses or family members
             </h2>
             <p className="text-xs text-slate-600 font-medium">
-              Anyone with this passcode can register and coordinate medication administration for Meera-ji.
+              Anyone with this passcode can register and coordinate medication administration for {patientDisplayName}.
             </p>
           </div>
 
-          <div className="flex items-center justify-between sm:justify-start gap-3 bg-white px-3 sm:px-5 py-3 rounded-2xl border-2 border-nest-400 shadow-sm w-full sm:w-auto">
-            <span className="font-mono text-xl font-black tracking-widest text-navy-950">
+          <div className="flex items-center justify-between sm:justify-start gap-2 bg-white px-3 sm:px-4 py-2.5 rounded-2xl border-2 border-nest-400 shadow-sm w-full sm:w-auto">
+            <span className="font-mono text-lg sm:text-xl font-black tracking-widest text-navy-950">
               {inviteCode}
             </span>
-            <button
-              type="button"
-              onClick={handleCopyPasscode}
-              className="p-2 rounded-xl bg-nest-600 hover:bg-nest-700 text-white transition-all"
-              title="Copy invite passcode"
-            >
-              {copied ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
-            </button>
+            <div className="flex items-center gap-1.5 ml-2">
+              <button
+                type="button"
+                onClick={handleCopyPasscode}
+                className="p-2 rounded-xl bg-nest-600 hover:bg-nest-700 text-white transition-all"
+                title="Copy invite passcode"
+              >
+                {copied ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
+              </button>
+              <button
+                type="button"
+                disabled={regenerating}
+                onClick={handleRegenerateCode}
+                className="p-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 transition-all"
+                title="Regenerate unique passcode"
+              >
+                <RotateCw className={`w-4 h-4 ${regenerating ? 'animate-spin' : ''}`} />
+              </button>
+            </div>
           </div>
         </div>
 
@@ -120,11 +161,11 @@ export default function CareCirclePage() {
                   className="p-5 rounded-3xl bg-white border border-slate-200/90 shadow-xs flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4"
                 >
                   <div className="flex items-center gap-4">
-                    <div className="w-12 h-12 rounded-2xl bg-nest-100 text-nest-800 font-black text-lg flex items-center justify-center">
-                      {(member.userName || 'M').charAt(0)}
+                    <div className="w-12 h-12 rounded-2xl bg-nest-100 text-nest-800 font-black text-lg flex items-center justify-center shrink-0">
+                      {(member.userName || member.userEmail || 'M').charAt(0).toUpperCase()}
                     </div>
                     <div>
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-2 flex-wrap">
                         <h4 className="font-black text-navy-950 text-base">
                           {member.userName || member.userEmail}
                         </h4>
@@ -139,9 +180,22 @@ export default function CareCirclePage() {
                     </div>
                   </div>
 
-                  <div className="flex items-center gap-2 text-xs font-bold text-emerald-700 bg-emerald-50 px-3 py-1.5 rounded-xl border border-emerald-200">
-                    <UserCheck className="w-4 h-4" />
-                    <span>Verified Active</span>
+                  <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-1.5 text-xs font-bold text-emerald-700 bg-emerald-50 px-3 py-1.5 rounded-xl border border-emerald-200">
+                      <UserCheck className="w-4 h-4" />
+                      <span>Verified Active</span>
+                    </div>
+
+                    {(user.role === 'OWNER' || user.role === 'senior' || user.role === 'owner') && member.userId !== user.id && (
+                      <button
+                        type="button"
+                        onClick={() => removeCareMember(member._id)}
+                        className="p-2 rounded-xl text-rose-500 hover:text-rose-700 hover:bg-rose-50 text-xs transition-colors"
+                        title="Remove member from care circle"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    )}
                   </div>
                 </div>
               ))}
@@ -172,13 +226,15 @@ export default function CareCirclePage() {
                       <p className="text-xs text-slate-500">{contact.relationship}</p>
                     </div>
 
-                    <a
-                      href={`tel:${contact.phone.replace(/\s+/g, '')}`}
-                      className="p-2 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-700 text-xs font-bold flex items-center gap-1.5 border border-rose-200"
-                    >
-                      <PhoneCall className="w-3.5 h-3.5" />
-                      <span>{contact.phone}</span>
-                    </a>
+                    {contact.phone && (
+                      <a
+                        href={`tel:${contact.phone.replace(/\s+/g, '')}`}
+                        className="p-2 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-700 text-xs font-bold flex items-center gap-1.5 border border-rose-200"
+                      >
+                        <PhoneCall className="w-3.5 h-3.5" />
+                        <span>{contact.phone}</span>
+                      </a>
+                    )}
                   </div>
                 ))}
               </div>
@@ -194,7 +250,7 @@ export default function CareCirclePage() {
                 </div>
                 <div>
                   <h3 className="text-base font-black text-navy-950">Join With Passcode</h3>
-                  <p className="text-xs text-slate-500 font-medium">Connect with an existing profile</p>
+                  <p className="text-xs text-slate-500 font-medium">Connect with an existing care household</p>
                 </div>
               </div>
 
@@ -212,7 +268,7 @@ export default function CareCirclePage() {
                     required
                     value={joinPasscode}
                     onChange={(e) => setJoinPasscode(e.target.value)}
-                    placeholder="e.g. CARE-NEST-7492"
+                    placeholder="e.g. CARE-A1B2 or NEST72"
                     className="w-full px-3 py-2 text-sm border border-slate-200 rounded-xl focus:ring-2 focus:ring-nest-500 outline-none uppercase font-mono font-bold"
                   />
                 </div>
@@ -233,16 +289,21 @@ export default function CareCirclePage() {
                 <span>RBAC Security Policy</span>
               </h4>
               <p className="text-slate-600 leading-relaxed font-medium">
-                <strong>Seniors:</strong> Can view their schedule, receive voice readouts, record their own taken doses, and log symptoms.
+                <strong>Seniors / Elder Owner:</strong> Hold sole consent power to approve new medications and invite/remove care circle members.
               </p>
               <p className="text-slate-600 leading-relaxed font-medium">
-                <strong>Caregivers:</strong> Can administer doses with atomic anti-double-dosing lock, create shift handoff notes, and manage cabinet stock.
+                <strong>Caregivers:</strong> Can propose medications (pending elder consent), administer doses with atomic anti-double-dosing lock, and log shift notes.
               </p>
               <p className="text-slate-600 leading-relaxed font-medium">
-                <strong>Family Members:</strong> Have remote adherence visibility, appointment scheduling, and AI doctor report generation.
+                <strong>Family Members:</strong> Have view-only adherence analytics, appointment scheduling, and AI doctor report generation.
               </p>
             </div>
           </div>
+        </div>
+
+        {/* Live Email Delivery & Background Automation Hub */}
+        <div className="pt-6 border-t border-slate-200/80">
+          <EmailDeliveryHub />
         </div>
       </div>
     </div>

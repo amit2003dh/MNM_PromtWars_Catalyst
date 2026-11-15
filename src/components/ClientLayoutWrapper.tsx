@@ -3,9 +3,10 @@
 import React from 'react';
 import { useCare } from '@/context/CareContext';
 import DoubleDoseWarningModal from './DoubleDoseWarningModal';
+import EmergencyActionModal from './EmergencyActionModal';
 
 export default function ClientLayoutWrapper({ children }: { children: React.ReactNode }) {
-  const { conflictModalData, closeConflictModal } = useCare();
+  const { conflictModalData, closeConflictModal, emergencyAlertActive, clearEmergencyAlert } = useCare();
 
   return (
     <>
@@ -18,6 +19,13 @@ export default function ClientLayoutWrapper({ children }: { children: React.Reac
           administeredByName={conflictModalData.administeredByName}
           recordedAt={conflictModalData.recordedAt}
           onClose={closeConflictModal}
+        />
+      )}
+
+      {emergencyAlertActive && (
+        <EmergencyActionModal
+          isOpen={emergencyAlertActive}
+          onClose={clearEmergencyAlert}
         />
       )}
     </>
