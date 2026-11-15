@@ -14,18 +14,6 @@ export default function LoginPage() {
   const [error, setError] = useState<string | null>(null);
   const [sentSuccess, setSentSuccess] = useState(false);
 
-  // Lock browser history on /login so pressing Back cannot return to previous authenticated pages
-  React.useEffect(() => {
-    if (typeof window !== 'undefined') {
-      window.history.pushState(null, '', window.location.href);
-      const handlePopState = () => {
-        window.history.pushState(null, '', window.location.href);
-      };
-      window.addEventListener('popstate', handlePopState);
-      return () => window.removeEventListener('popstate', handlePopState);
-    }
-  }, []);
-
   const handleSendOtp = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
@@ -200,6 +188,14 @@ export default function LoginPage() {
             <Lock className="w-3.5 h-3.5 text-slate-400 shrink-0" />
             <span>Protected by MongoDB Session Tokens &amp; Strict Multi-Tenant Isolation.</span>
           </p>
+        </div>
+
+        {/* Link to Register / Sign Up */}
+        <div className="text-center text-xs text-slate-500 pt-3 border-t border-slate-100">
+          <span>New to CareNest AI? </span>
+          <Link href="/register" className="font-bold text-nest-700 hover:underline">
+            Create an Account / Sign Up
+          </Link>
         </div>
 
       </div>

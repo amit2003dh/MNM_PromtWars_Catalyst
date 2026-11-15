@@ -261,6 +261,30 @@ export function CareProvider({ children }: { children: React.ReactNode }) {
           if (authData.memberships) {
             setCareMembers(authData.memberships);
           }
+        } else {
+          // Server says visitor is not authenticated
+          setIsAuthenticated(false);
+          setIsDemoMode(false);
+          setUser(DEMO_USERS.caregiver);
+          setHousehold(null);
+          setHouseholdId(null);
+          if (typeof window !== 'undefined') {
+            try {
+              localStorage.removeItem('carenest_user');
+              localStorage.removeItem('carenest_household');
+              localStorage.removeItem('carenest_household_id');
+              localStorage.setItem('carenest_is_authenticated', 'false');
+              localStorage.removeItem('carenest_is_demo');
+            } catch {}
+          }
+          setTodayDoses([]);
+          setMedications([]);
+          setHealthLogs([]);
+          setCaregiverNotes([]);
+          setAppointments([]);
+          setNotifications([]);
+          setIsLoading(false);
+          return;
         }
       } else {
         // Not authenticated - clear state and return early without calling protected endpoints

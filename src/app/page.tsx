@@ -46,8 +46,34 @@ export default function LandingPage() {
             Eliminating accidental double-dosing with concurrency locks, empowering seniors with giant touch controls & voice read-aloud, and keeping families seamlessly in sync.
           </p>
 
+          {/* Main Action Buttons: Real Sign Up & Sign In */}
+          <div className="flex flex-col sm:flex-row items-center justify-center gap-3 pt-2">
+            <Link
+              href="/register"
+              className="w-full sm:w-auto px-7 py-4 rounded-2xl bg-nest-600 hover:bg-nest-700 active:scale-98 text-white font-black text-sm sm:text-base shadow-lg shadow-nest-600/25 transition-all flex items-center justify-center gap-2.5"
+            >
+              <span>Get Started • Create Account</span>
+              <ArrowRight className="w-4 h-4" />
+            </Link>
+            <Link
+              href="/login"
+              className="w-full sm:w-auto px-7 py-4 rounded-2xl bg-white hover:bg-slate-50 active:scale-98 text-slate-800 font-black text-sm sm:text-base border border-slate-300 shadow-xs transition-all flex items-center justify-center gap-2.5"
+            >
+              <HeartHandshake className="w-4 h-4 text-nest-600" />
+              <span>Sign In with Gmail OTP</span>
+            </Link>
+          </div>
+
+          {/* Pre-Seeded Interactive Demo Personas */}
+          <div className="pt-6">
+            <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-amber-50 border border-amber-200 text-amber-900 text-xs font-bold">
+              <Sparkles className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+              <span>Hackathon Evaluation: 1-Click Interactive Demo Personas</span>
+            </div>
+          </div>
+
           {/* Quick Launch Role Portals */}
-          <div className="pt-6 grid grid-cols-1 md:grid-cols-3 gap-6 max-w-5xl mx-auto text-left">
+          <div className="pt-2 grid grid-cols-1 md:grid-cols-3 gap-6 max-w-5xl mx-auto text-left">
             {/* Senior Card */}
             <div className="rounded-3xl bg-white border-2 border-amber-300 p-6 shadow-md hover:shadow-xl transition-all flex flex-col justify-between">
               <div className="space-y-3">
@@ -56,7 +82,7 @@ export default function LandingPage() {
                 </div>
                 <div>
                   <span className="text-[11px] font-black uppercase tracking-wider text-amber-800 bg-amber-100 px-2.5 py-0.5 rounded-full">
-                    Senior Experience
+                    Senior Demo Persona
                   </span>
                   <h3 className="text-xl font-black text-navy-950 mt-1">Meera Sharma (74y)</h3>
                   <p className="text-xs text-slate-500 font-medium">Hypertension & Type 2 Diabetes</p>
@@ -82,7 +108,7 @@ export default function LandingPage() {
                 onClick={() => handleLaunchRole('senior')}
                 className="mt-6 w-full py-3.5 px-4 rounded-2xl bg-amber-500 hover:bg-amber-600 text-white font-black text-sm shadow-md transition-all flex items-center justify-center gap-2"
               >
-                <span>Launch Senior Mode</span>
+                <span>Launch Senior Demo</span>
                 <ArrowRight className="w-4 h-4" />
               </button>
             </div>
@@ -95,7 +121,7 @@ export default function LandingPage() {
                 </div>
                 <div>
                   <span className="text-[11px] font-black uppercase tracking-wider text-nest-800 bg-nest-100 px-2.5 py-0.5 rounded-full">
-                    Caregiver Portal
+                    Caregiver Demo Persona
                   </span>
                   <h3 className="text-xl font-black text-navy-950 mt-1">Sunita Verma</h3>
                   <p className="text-xs text-slate-500 font-medium">Primary In-Home Nurse & Caregiver</p>
@@ -121,7 +147,7 @@ export default function LandingPage() {
                 onClick={() => handleLaunchRole('caregiver')}
                 className="mt-6 w-full py-3.5 px-4 rounded-2xl bg-nest-600 hover:bg-nest-700 text-white font-black text-sm shadow-md transition-all flex items-center justify-center gap-2"
               >
-                <span>Open Caregiver Portal</span>
+                <span>Open Caregiver Demo</span>
                 <ArrowRight className="w-4 h-4" />
               </button>
             </div>
@@ -134,7 +160,7 @@ export default function LandingPage() {
                 </div>
                 <div>
                   <span className="text-[11px] font-black uppercase tracking-wider text-sky-800 bg-sky-100 px-2.5 py-0.5 rounded-full">
-                    Family Hub
+                    Family Hub Demo Persona
                   </span>
                   <h3 className="text-xl font-black text-navy-950 mt-1">Rahul Sharma</h3>
                   <p className="text-xs text-slate-500 font-medium">Devoted Son & Family Coordinator</p>
@@ -160,7 +186,7 @@ export default function LandingPage() {
                 onClick={() => handleLaunchRole('family')}
                 className="mt-6 w-full py-3.5 px-4 rounded-2xl bg-navy-900 hover:bg-navy-800 text-white font-black text-sm shadow-md transition-all flex items-center justify-center gap-2"
               >
-                <span>Access Family Hub</span>
+                <span>Access Family Demo</span>
                 <ArrowRight className="w-4 h-4" />
               </button>
             </div>

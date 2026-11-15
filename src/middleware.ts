@@ -20,7 +20,7 @@ export function middleware(request: NextRequest) {
     (route) => pathname === route || pathname.startsWith(`${route}/`)
   );
 
-  // 1. Intercept unauthorized access to protected routes
+  // Intercept unauthorized access to protected routes
   if (isProtected) {
     if (!sessionToken) {
       const loginUrl = new URL('/login', request.url);
@@ -42,11 +42,6 @@ export function middleware(request: NextRequest) {
     return response;
   }
 
-  // 2. If already logged in and visiting login or verify-otp, forward to dashboard
-  if (sessionToken && (pathname === '/login' || pathname === '/verify-otp')) {
-    return NextResponse.redirect(new URL('/dashboard', request.url));
-  }
-
   return NextResponse.next();
 }
 
@@ -60,7 +55,5 @@ export const config = {
     '/health-journal/:path*',
     '/reports/:path*',
     '/settings/:path*',
-    '/login',
-    '/verify-otp',
   ],
 };
