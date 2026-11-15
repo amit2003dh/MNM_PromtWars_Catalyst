@@ -46,7 +46,9 @@ export default function StatCards() {
     {
       title: 'Care Circle',
       value: careMembers.length.toString(),
-      subtitle: 'Meera, Sunita & Rahul',
+      subtitle: careMembers.length > 0
+        ? `${careMembers.length} active member${careMembers.length > 1 ? 's' : ''}`
+        : 'No members yet',
       icon: Users,
       color: 'bg-sky-50 text-sky-700 border-sky-200',
       href: '/care-circle',

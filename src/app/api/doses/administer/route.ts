@@ -1,20 +1,20 @@
 import { NextResponse } from 'next/server';
-import { getCurrentUser, verifyMembership, canAdministerDose } from '@/lib/auth';
+import { authenticateRequest, canAdministerDose } from '@/lib/auth';
 import { 
   getDoseEventsCollection, 
   getMedicationsCollection, 
   getNotificationsCollection, 
-  logAudit, 
-  SEED_IDS 
+  getCareProfilesCollection,
+  logAudit 
 } from '@/lib/db';
 import { AdministerDoseSchema } from '@/lib/validations';
 import { DoseEvent, Medication, NotificationRecord } from '@/types';
 
 export async function POST(request: Request) {
   try {
-    const user = await getCurrentUser(request);
-    if (!user) {
-      return NextResponse.json({ error: 'Unauthorized: Authentication required' }, { status: 401 });
+    const auth = await authenticateRequest(request);
+    if (!auth.authenticated || !auth.user || !auth.householdId) {
+      return NextResponse.json({ error: auth.error || 'Unauthorized: Authentication required' }, { status: auth.statusCode || 401 });
     }
 
     const json = await request.json();
@@ -28,17 +28,27 @@ export async function POST(request: Request) {
     }
 
     const data = result.data;
-    const { isMember, role } = await verifyMembership(user._id, data.careProfileId);
 
-    if (data.careProfileId !== SEED_IDS.PROFILE_MEERA && !isMember) {
-      return NextResponse.json({ error: 'Forbidden: You are not a member of this care circle' }, { status: 403 });
+    // Verify care profile belongs to this household
+    const profilesCol = await getCareProfilesCollection();
+    let profile = null;
+    if (data.careProfileId) {
+      profile = await profilesCol.findOne({ _id: data.careProfileId, householdId: auth.householdId });
+      if (!profile) {
+        return NextResponse.json({ error: 'Forbidden: Access denied to this care circle' }, { status: 403 });
+      }
+    } else {
+      profile = await profilesCol.findOne({ householdId: auth.householdId });
+      if (!profile) {
+        return NextResponse.json({ error: 'Forbidden: No active care profile in this household' }, { status: 403 });
+      }
+      data.careProfileId = profile._id;
     }
 
-    const effectiveRole = role || user.role;
-    // Family members are restricted from marking doses taken (read-only)
-    if (!canAdministerDose(effectiveRole)) {
+    // Role-based check
+    if (!canAdministerDose(auth.role)) {
       return NextResponse.json(
-        { error: 'Forbidden: Family members have read-only access. Only seniors and caregivers may administer or record doses.' },
+        { error: 'Forbidden: Your role does not permit administering doses.' },
         { status: 403 }
       );
     }
@@ -46,8 +56,11 @@ export async function POST(request: Request) {
     const doseEventsCol = await getDoseEventsCollection();
     const medicationsCol = await getMedicationsCollection();
 
-    // 1. Check if the dose has already been taken (Anti-Double-Dosing Verification)
-    const existingDose = await doseEventsCol.findOne({ doseKey: data.doseKey });
+    // 1. Anti-Double-Dosing Verification on doseKey
+    const existingDose = await doseEventsCol.findOne({ 
+      doseKey: data.doseKey,
+      householdId: auth.householdId,
+    });
 
     if (existingDose && existingDose.status === 'taken') {
       return NextResponse.json(
@@ -67,144 +80,148 @@ export async function POST(request: Request) {
     const now = new Date().toISOString();
     const statusToSet = data.status || 'taken';
 
-    // 2. Concurrency-Safe Atomic Update
-    // Matches doseKey where status is NOT 'taken'. If concurrently marked, this atomic operation will not match.
+    // 2. Concurrency-Safe Atomic Update with household scoping
     let updatedEvent: DoseEvent | null = null;
 
-    if (existingDose) {
-      updatedEvent = await doseEventsCol.findOneAndUpdate(
+    try {
+      const atomicResult = await doseEventsCol.findOneAndUpdate(
         { 
           doseKey: data.doseKey, 
+          householdId: auth.householdId,
           status: { $ne: 'taken' } 
         },
         {
           $set: {
             status: statusToSet,
-            administeredBy: user._id,
-            administeredByName: user.name,
+            administeredBy: auth.user._id,
+            administeredByName: auth.user.name,
             recordedAt: now,
-            notes: data.notes || existingDose.notes || '',
+            notes: data.notes || '',
           },
         },
         { returnDocument: 'after' }
       );
 
-      // If document was not updated, another concurrent request just marked it!
-      if (!updatedEvent) {
-        const raceDose = await doseEventsCol.findOne({ doseKey: data.doseKey });
-        return NextResponse.json(
-          {
-            error: 'Safety Alert: Concurrency conflict — dose was just administered by another caregiver!',
-            alreadyAdministered: true,
-            doseKey: data.doseKey,
-            administeredBy: raceDose?.administeredBy,
-            administeredByName: raceDose?.administeredByName,
-            recordedAt: raceDose?.recordedAt,
-          },
-          { status: 409 }
-        );
+      if (atomicResult) {
+        updatedEvent = atomicResult as DoseEvent;
       }
-    } else {
-      // Upsert / Insert new dose event
-      const newDoseId = `dose_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
-      const newEvent: DoseEvent = {
-        _id: newDoseId,
+    } catch {
+      // Fallback
+    }
+
+    // 3. If no existing scheduled document was modified, insert a fresh event
+    if (!updatedEvent) {
+      const newDoseEvent: DoseEvent = {
+        _id: `dose_event_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+        householdId: auth.householdId,
         careProfileId: data.careProfileId,
         medicationId: data.medicationId,
         doseKey: data.doseKey,
         scheduledAt: data.scheduledAt || now,
         status: statusToSet,
-        administeredBy: user._id,
-        administeredByName: user.name,
+        administeredBy: auth.user._id,
+        administeredByName: auth.user.name,
         recordedAt: now,
         notes: data.notes || '',
       };
 
       try {
-        await doseEventsCol.insertOne(newEvent);
-        updatedEvent = newEvent;
-      } catch (err: any) {
-        // Handle race condition on unique index on doseKey
-        if (err.code === 11000 || err.message?.includes('duplicate key')) {
-          const raceDose = await doseEventsCol.findOne({ doseKey: data.doseKey });
+        await doseEventsCol.insertOne(newDoseEvent);
+        updatedEvent = newDoseEvent;
+      } catch (insertErr: any) {
+        // Duplicate key collision (Mongo code 11000 or duplicate key)
+        if (insertErr.code === 11000 || insertErr.message?.includes('duplicate key') || insertErr.message?.includes('E11000')) {
+          const conflictingEvent = await doseEventsCol.findOne({ doseKey: data.doseKey });
           return NextResponse.json(
             {
-              error: 'Safety Alert: Duplicate dose administration prevented by unique dose key index!',
+              error: 'Safety Alert: Concurrent dose administration blocked! This dose was just marked by another user.',
               alreadyAdministered: true,
               doseKey: data.doseKey,
-              administeredBy: raceDose?.administeredBy,
-              administeredByName: raceDose?.administeredByName,
-              recordedAt: raceDose?.recordedAt,
+              administeredBy: conflictingEvent?.administeredBy,
+              administeredByName: conflictingEvent?.administeredByName || 'Another Caregiver',
+              recordedAt: conflictingEvent?.recordedAt || now,
+              notes: conflictingEvent?.notes,
             },
             { status: 409 }
           );
         }
-        throw err;
+        throw insertErr;
       }
     }
 
-    // 3. Atomically Decrement Medication Inventory (if marked taken)
-    let remainingQuantity: number | undefined;
-    let medName = 'Medication';
-
+    // 4. Atomically Decrement Medication Inventory
+    let medAfterUpdate: Medication | null = null;
     if (statusToSet === 'taken') {
-      const medDoc: Medication | null = await medicationsCol.findOne({ _id: data.medicationId });
-      if (medDoc) {
-        medName = medDoc.medicineName;
-        // Decrement remainingQuantity by 1, avoiding negative counts
-        const currentQty = medDoc.remainingQuantity ?? 0;
-        const newQty = Math.max(0, currentQty - 1);
+      try {
         await medicationsCol.updateOne(
-          { _id: data.medicationId },
-          { $set: { remainingQuantity: newQty, updatedAt: now } }
+          { _id: data.medicationId, householdId: auth.householdId, remainingQuantity: { $gt: 0 } },
+          { $inc: { remainingQuantity: -1 }, $set: { updatedAt: now } }
         );
-        remainingQuantity = newQty;
-
-        // 4. Trigger Refill Alert if remainingQuantity drops to or below threshold
-        if (newQty <= (medDoc.refillThreshold ?? 5)) {
-          const notifsCol = await getNotificationsCollection();
-          const refillNotif: NotificationRecord = {
-            _id: `notif_${Date.now()}_refill`,
-            careProfileId: data.careProfileId,
-            title: `Low Inventory Alert: ${medDoc.medicineName}`,
-            message: `${medDoc.medicineName} has only ${newQty} units remaining (Refill threshold: ${medDoc.refillThreshold}). Please arrange a refill soon.`,
-            type: 'refill',
-            priority: 'high',
-            status: 'unread',
-            sentViaEmail: false,
-            createdAt: now,
-          };
-          await notifsCol.insertOne(refillNotif);
-        }
+        medAfterUpdate = await medicationsCol.findOne({ _id: data.medicationId, householdId: auth.householdId });
+      } catch (medErr) {
+        console.warn('[API Dose Administer] Inventory decrement notice:', medErr);
       }
     }
 
-    // 5. Audit Log
+    // 5. Automatic Low-Inventory Escalation Alert
+    if (
+      medAfterUpdate &&
+      medAfterUpdate.remainingQuantity !== undefined &&
+      medAfterUpdate.refillThreshold !== undefined &&
+      medAfterUpdate.remainingQuantity <= medAfterUpdate.refillThreshold
+    ) {
+      const notifsCol = await getNotificationsCollection();
+      const existingRefillAlert = await notifsCol.findOne({
+        householdId: auth.householdId,
+        careProfileId: data.careProfileId,
+        type: 'refill',
+        status: 'unread',
+        title: { $regex: medAfterUpdate.medicineName },
+      });
+
+      if (!existingRefillAlert) {
+        const refillAlert: NotificationRecord = {
+          _id: `notif_${Date.now()}_refill`,
+          householdId: auth.householdId,
+          careProfileId: data.careProfileId,
+          title: `Low Stock Alert: ${medAfterUpdate.medicineName}`,
+          message: `${medAfterUpdate.medicineName} has only ${medAfterUpdate.remainingQuantity} units remaining (Threshold: ${medAfterUpdate.refillThreshold}). Please reorder soon.`,
+          type: 'refill',
+          priority: 'high',
+          status: 'unread',
+          sentViaEmail: false,
+          createdAt: now,
+        };
+        await notifsCol.insertOne(refillAlert);
+      }
+    }
+
+    // 6. Record Tamper-Evident Audit Log
     await logAudit({
+      householdId: auth.householdId,
       careProfileId: data.careProfileId,
-      actorId: user._id,
-      actorName: user.name,
-      actorRole: effectiveRole,
+      actorId: auth.user._id,
+      actorName: auth.user.name,
+      actorRole: auth.role || 'OWNER',
       action: 'ADMINISTER_DOSE',
       entityType: 'doseEvent',
       entityId: updatedEvent._id,
       details: {
         doseKey: data.doseKey,
         medicationId: data.medicationId,
-        medicineName: medName,
         status: statusToSet,
-        remainingQuantity,
+        remainingQuantity: medAfterUpdate?.remainingQuantity,
       },
     });
 
     return NextResponse.json({
       success: true,
-      message: `Dose of ${medName} marked as ${statusToSet}`,
+      message: 'Dose marked as taken successfully',
       doseEvent: updatedEvent,
-      remainingQuantity,
-    }, { status: 200 });
+      remainingQuantity: medAfterUpdate?.remainingQuantity,
+    });
   } catch (err: any) {
-    console.error('[API Doses Administer] Error:', err);
+    console.error('[API Dose Administer] Error:', err);
     return NextResponse.json({ error: 'Internal server error', message: err?.message }, { status: 500 });
   }
 }

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { generateDoctorSummary } from '@/lib/ai/doctor-summary';
 import { getCareNestDb } from '@/lib/ai/db-helper';
+import { authenticateRequest } from '@/lib/auth';
 import { CareProfile, Medication, DoseEvent, HealthLog, CaregiverNote, Appointment } from '@/types';
 
 // Zod schema for validation
@@ -58,16 +59,23 @@ export async function POST(req: NextRequest) {
 
     // If profile not fully provided in body, load from database
     if (!targetProfile || targetMeds.length === 0) {
+      const auth = await authenticateRequest(req);
       const db = await getCareNestDb();
 
       let profileDoc: any = null;
       if (careProfileId) {
-        profileDoc = await db.careProfiles.findOne({ 
-          $or: [{ _id: careProfileId }, { id: careProfileId }] 
-        });
+        const query: any = { $or: [{ _id: careProfileId }, { id: careProfileId }] };
+        if (auth.authenticated && auth.householdId) {
+          query.householdId = auth.householdId;
+        }
+        profileDoc = await db.careProfiles.findOne(query);
       }
 
-      // If still not found or no careProfileId passed, default to first available care profile (e.g. Meera Sharma)
+      if (!profileDoc && auth.authenticated && auth.householdId) {
+        profileDoc = await db.careProfiles.findOne({ householdId: auth.householdId });
+      }
+
+      // Fallback for unauthenticated testing / unit test suite
       if (!profileDoc) {
         const allProfiles = await db.careProfiles.find({}).toArray();
         if (allProfiles && allProfiles.length > 0) {
@@ -90,35 +98,41 @@ export async function POST(req: NextRequest) {
       }
 
       const activeProfileId = targetProfile?._id || (targetProfile as any)?.id || careProfileId;
+      const hhFilter: any = (targetProfile?.householdId || auth?.householdId) ? { householdId: targetProfile?.householdId || auth?.householdId } : {};
 
-      // Fetch related records from DB if not passed directly
+      // Fetch related records from DB if not passed directly, scoped to household
       if (targetMeds.length === 0) {
         targetMeds = await db.medications.find({ 
-          $or: [{ careProfileId: activeProfileId }, { careProfileId: { $exists: false } }] 
+          careProfileId: activeProfileId,
+          ...hhFilter
         }).toArray();
       }
 
       if (targetDoses.length === 0) {
         targetDoses = await db.doseEvents.find({ 
-          careProfileId: activeProfileId 
+          careProfileId: activeProfileId,
+          ...hhFilter
         }).toArray();
       }
 
       if (targetLogs.length === 0) {
         targetLogs = await db.healthLogs.find({ 
-          careProfileId: activeProfileId 
+          careProfileId: activeProfileId,
+          ...hhFilter
         }).toArray();
       }
 
       if (targetNotes.length === 0) {
         targetNotes = await db.caregiverNotes.find({ 
-          careProfileId: activeProfileId 
+          careProfileId: activeProfileId,
+          ...hhFilter
         }).toArray();
       }
 
       if (targetAppts.length === 0) {
         targetAppts = await db.appointments.find({ 
-          careProfileId: activeProfileId 
+          careProfileId: activeProfileId,
+          ...hhFilter
         }).toArray();
       }
     }

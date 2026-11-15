@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
-import { getCurrentUser, verifyMembership } from '@/lib/auth';
-import { getNotificationsCollection, SEED_IDS } from '@/lib/db';
+import { authenticateRequest } from '@/lib/auth';
+import { getNotificationsCollection, getCareProfilesCollection } from '@/lib/db';
 import { z } from 'zod';
 
 const PatchNotificationSchema = z.object({
@@ -10,19 +10,26 @@ const PatchNotificationSchema = z.object({
 
 export async function GET(request: Request) {
   try {
-    const user = await getCurrentUser(request);
-    const { searchParams } = new URL(request.url);
-    const careProfileId = searchParams.get('careProfileId') || SEED_IDS.PROFILE_MEERA;
-    const status = searchParams.get('status');
-
-    if (user && careProfileId !== SEED_IDS.PROFILE_MEERA) {
-      const { isMember } = await verifyMembership(user._id, careProfileId);
-      if (!isMember) {
-        return NextResponse.json({ error: 'Forbidden: Access denied' }, { status: 403 });
-      }
+    const auth = await authenticateRequest(request);
+    if (!auth.authenticated || !auth.householdId) {
+      return NextResponse.json({ error: auth.error || 'Unauthorized' }, { status: auth.statusCode || 401 });
     }
 
-    const query: Record<string, any> = { careProfileId };
+    const { searchParams } = new URL(request.url);
+    const careProfileId = searchParams.get('careProfileId');
+    const status = searchParams.get('status');
+
+    const query: Record<string, any> = { householdId: auth.householdId };
+    
+    if (careProfileId) {
+      const profilesCol = await getCareProfilesCollection();
+      const profile = await profilesCol.findOne({ _id: careProfileId, householdId: auth.householdId });
+      if (!profile) {
+        return NextResponse.json({ error: 'Forbidden: Access denied' }, { status: 403 });
+      }
+      query.careProfileId = careProfileId;
+    }
+
     if (status) query.status = status;
 
     const notifsCol = await getNotificationsCollection();
@@ -37,9 +44,9 @@ export async function GET(request: Request) {
 
 export async function PATCH(request: Request) {
   try {
-    const user = await getCurrentUser(request);
-    if (!user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    const auth = await authenticateRequest(request);
+    if (!auth.authenticated || !auth.householdId) {
+      return NextResponse.json({ error: auth.error || 'Unauthorized' }, { status: auth.statusCode || 401 });
     }
 
     const json = await request.json();
@@ -50,6 +57,17 @@ export async function PATCH(request: Request) {
 
     const { id, status } = result.data;
     const notifsCol = await getNotificationsCollection();
+    
+    const existing = await notifsCol.findOne({ _id: id });
+    if (!existing) {
+      return NextResponse.json({ error: 'Notification not found' }, { status: 404 });
+    }
+
+    // IDOR Protection: Verify household
+    if (existing.householdId && existing.householdId !== auth.householdId) {
+      return NextResponse.json({ error: 'Forbidden: Access denied' }, { status: 403 });
+    }
+
     await notifsCol.updateOne({ _id: id }, { $set: { status } });
 
     return NextResponse.json({ success: true, id, status });

@@ -86,7 +86,7 @@ export async function POST(request: Request) {
       careProfileId: matchedProfile._id,
       actorId: user._id,
       actorName: user.name,
-      actorRole: user.role,
+      actorRole: user.role || 'family',
       action: 'JOIN_CARE_CIRCLE',
       entityType: 'careMembership',
       entityId: newMembership._id,

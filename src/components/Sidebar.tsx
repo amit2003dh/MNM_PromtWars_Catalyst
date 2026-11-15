@@ -15,12 +15,14 @@ import {
   AlertTriangle,
   PhoneCall,
   ShieldCheck,
+  LogOut,
+  Home,
 } from 'lucide-react';
 import { useCare } from '@/context/CareContext';
 
 export default function Sidebar() {
   const pathname = usePathname();
-  const { user, todayDoses, medications, triggerEmergency } = useCare();
+  const { user, household, isAuthenticated, isDemoMode, logout, todayDoses, medications, triggerEmergency } = useCare();
 
   const pendingDosesCount = todayDoses.filter((d) => d.status === 'scheduled').length;
   const lowStockCount = medications.filter((m) => m.remainingQuantity <= m.refillThreshold).length;
@@ -83,20 +85,30 @@ export default function Sidebar() {
     <aside className="hidden md:flex flex-col w-64 xl:w-72 bg-white border-r border-slate-200/80 min-h-[calc(100vh-4rem)] p-4 shrink-0 justify-between">
       <div className="space-y-6">
         {/* User Card */}
-        <div className="p-3.5 rounded-2xl bg-slate-50 border border-slate-200/80 flex items-center gap-3">
-          <div className="w-11 h-11 rounded-xl bg-gradient-to-tr from-nest-600 to-nest-500 text-white font-black flex items-center justify-center text-lg shadow-sm">
-            {user.name.charAt(0)}
+        <div className="p-3.5 rounded-2xl bg-slate-50 border border-slate-200/80 space-y-2">
+          <div className="flex items-center gap-3">
+            <div className="w-11 h-11 rounded-xl bg-gradient-to-tr from-nest-600 to-nest-500 text-white font-black flex items-center justify-center text-lg shadow-sm shrink-0">
+              {user.name.charAt(0)}
+            </div>
+            <div className="overflow-hidden min-w-0">
+              <h3 className="font-bold text-navy-950 text-sm truncate">{user.name}</h3>
+              <p className="text-xs text-slate-500 font-medium capitalize flex items-center gap-1.5 truncate">
+                <span className="w-2 h-2 rounded-full bg-emerald-500 shrink-0" />
+                <span className="truncate">
+                  {(user.role as string) === 'primary_caregiver' || user.role === 'caregiver'
+                    ? 'Caregiver'
+                    : user.role === 'senior'
+                    ? 'Senior Patient'
+                    : 'Family Member'}
+                </span>
+              </p>
+            </div>
           </div>
-          <div className="overflow-hidden">
-            <h3 className="font-bold text-navy-950 text-sm truncate">{user.name}</h3>
-            <p className="text-xs text-slate-500 font-medium capitalize flex items-center gap-1.5">
-              <span className="w-2 h-2 rounded-full bg-emerald-500" />
-              {(user.role as string) === 'primary_caregiver' || user.role === 'caregiver'
-                ? 'Caregiver'
-                : user.role === 'senior'
-                ? 'Senior Patient'
-                : 'Family Member'}
-            </p>
+
+          {/* Household indicator */}
+          <div className="text-[11px] text-nest-800 bg-nest-50/80 border border-nest-200/80 px-2.5 py-1 rounded-xl font-bold truncate flex items-center gap-1.5">
+            <Home className="w-3.5 h-3.5 text-nest-600 shrink-0" />
+            <span className="truncate">{household?.name || (isDemoMode ? 'Demo: Sharma Family' : 'Care Household')}</span>
           </div>
         </div>
 
@@ -149,6 +161,17 @@ export default function Sidebar() {
           <PhoneCall className="w-4 h-4 text-rose-600" />
           <span>Emergency Assistance</span>
         </button>
+
+        {isAuthenticated && (
+          <button
+            type="button"
+            onClick={logout}
+            className="w-full flex items-center justify-center gap-2 py-2 px-3 rounded-xl text-xs font-bold text-slate-500 hover:text-rose-700 hover:bg-rose-50 border border-transparent hover:border-rose-200 transition-all"
+          >
+            <LogOut className="w-3.5 h-3.5" />
+            <span>Sign Out</span>
+          </button>
+        )}
       </div>
     </aside>
   );

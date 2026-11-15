@@ -41,7 +41,7 @@ export const JoinCareCircleSchema = z.object({
 });
 
 export const MedicationCreateSchema = z.object({
-  careProfileId: z.string().min(1, 'Care Profile ID is required'),
+  careProfileId: z.string().optional(),
   medicineName: z.string().min(1, 'Medicine name is required'),
   medicineCategory: z.enum(['allopathic', 'ayurvedic', 'herbal', 'otc']),
   dosage: z.string().min(1, 'Dosage is required (e.g. 500mg)'),
@@ -55,7 +55,7 @@ export const MedicationCreateSchema = z.object({
   totalQuantity: z.number().int().min(0, 'Total quantity cannot be negative'),
   remainingQuantity: z.number().int().min(0, 'Remaining quantity cannot be negative'),
   refillThreshold: z.number().int().min(0, 'Refill threshold cannot be negative'),
-  startDate: z.string().min(1, 'Start date is required'),
+  startDate: z.string().optional(),
   endDate: z.string().optional(),
   status: z.enum(['active', 'discontinued', 'tapered', 'completed']).default('active'),
   reconciliationStatus: z.enum(['CONTINUE', 'MODIFIED', 'DISCONTINUED', 'TAPERED']).optional(),

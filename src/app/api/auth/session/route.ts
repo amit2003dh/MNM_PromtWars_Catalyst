@@ -15,6 +15,9 @@ export async function GET(request: Request) {
     return NextResponse.json({
       authenticated: true,
       user: session.user,
+      household: session.household,
+      householdId: session.householdId,
+      role: session.role || 'OWNER',
       memberships: session.memberships,
       activeProfile: session.activeProfile,
     });

@@ -1,31 +1,46 @@
 import { NextResponse } from 'next/server';
-import { getCurrentUser, verifyMembership } from '@/lib/auth';
+import { authenticateRequest } from '@/lib/auth';
 import { 
   getMedicationsCollection, 
   getDoseEventsCollection, 
+  getCareProfilesCollection,
   SEED_IDS 
 } from '@/lib/db';
 import { ScheduleItem, DoseStatus, Medication, DoseEvent } from '@/types';
 
 export async function GET(request: Request) {
   try {
-    const user = await getCurrentUser(request);
+    const auth = await authenticateRequest(request);
+    if (!auth.authenticated || !auth.householdId) {
+      return NextResponse.json({ error: auth.error || 'Unauthorized' }, { status: auth.statusCode || 401 });
+    }
+
     const { searchParams } = new URL(request.url);
-    const careProfileId = searchParams.get('careProfileId') || SEED_IDS.PROFILE_MEERA;
-    
-    // Target date in YYYY-MM-DD format (defaults to current date)
+    let careProfileId = searchParams.get('careProfileId');
     const targetDate = searchParams.get('date') || new Date().toISOString().split('T')[0];
 
-    if (user && careProfileId !== SEED_IDS.PROFILE_MEERA) {
-      const { isMember } = await verifyMembership(user._id, careProfileId);
-      if (!isMember) {
+    const profilesCol = await getCareProfilesCollection();
+
+    if (careProfileId) {
+      const profile = await profilesCol.findOne({ _id: careProfileId, householdId: auth.householdId });
+      if (!profile) {
         return NextResponse.json({ error: 'Forbidden: Access denied to this care profile' }, { status: 403 });
+      }
+    } else {
+      const profile = await profilesCol.findOne({ householdId: auth.householdId });
+      if (profile) {
+        careProfileId = profile._id;
+      } else if (auth.householdId === SEED_IDS.HOUSEHOLD_DEMO_MEERA) {
+        careProfileId = SEED_IDS.PROFILE_MEERA;
+      } else {
+        return NextResponse.json({ schedule: [], adherenceScore: 100, completedCount: 0, totalCount: 0 });
       }
     }
 
     const medicationsCol = await getMedicationsCollection();
-    // Fetch active medications for this profile
+    // Fetch active medications strictly scoped by householdId and profile
     const medications: Medication[] = await medicationsCol.find({
+      householdId: auth.householdId,
       careProfileId,
       status: 'active',
     }).toArray();
@@ -33,10 +48,10 @@ export async function GET(request: Request) {
     // Query doseEvents for this profile
     const doseEventsCol = await getDoseEventsCollection();
     const existingDoseEvents: DoseEvent[] = await doseEventsCol.find({
+      householdId: auth.householdId,
       careProfileId,
     }).toArray();
 
-    // Create a lookup map of existing dose events by doseKey
     const doseEventMap = new Map<string, DoseEvent>();
     existingDoseEvents.forEach((de) => {
       if (de.doseKey) {
@@ -46,9 +61,7 @@ export async function GET(request: Request) {
 
     const scheduleItems: ScheduleItem[] = [];
 
-    // Construct schedule items for targetDate
     for (const med of medications) {
-      // Check if med is within active start/end date range
       if (med.startDate && med.startDate > targetDate) continue;
       if (med.endDate && med.endDate < targetDate) continue;
 
@@ -60,21 +73,20 @@ export async function GET(request: Request) {
         const existingEvent = doseEventMap.get(doseKey);
 
         let status: DoseStatus = 'scheduled';
-        let doseEventId: string | undefined = undefined;
-        let administeredBy: string | undefined = undefined;
-        let administeredByName: string | undefined = undefined;
-        let recordedAt: string | undefined = undefined;
-
         if (existingEvent) {
           status = existingEvent.status;
-          doseEventId = existingEvent._id;
-          administeredBy = existingEvent.administeredBy;
-          administeredByName = existingEvent.administeredByName;
-          recordedAt = existingEvent.recordedAt;
+        } else {
+          // If scheduled time has passed by more than 60 minutes and not marked, consider missed
+          const scheduledTimeMs = new Date(scheduledAt).getTime();
+          const nowMs = Date.now();
+          if (nowMs > scheduledTimeMs + 60 * 60 * 1000) {
+            status = 'missed';
+          }
         }
 
         scheduleItems.push({
           doseKey,
+          householdId: auth.householdId,
           medicationId: med._id,
           medicineName: med.medicineName,
           medicineCategory: med.medicineCategory,
@@ -86,35 +98,30 @@ export async function GET(request: Request) {
           pillColor: med.pillColor,
           pillShape: med.pillShape,
           status,
-          doseEventId,
-          administeredBy,
-          administeredByName,
-          recordedAt,
-          remainingQuantity: med.remainingQuantity ?? 0,
+          doseEventId: existingEvent?._id,
+          administeredBy: existingEvent?.administeredBy,
+          administeredByName: existingEvent?.administeredByName,
+          recordedAt: existingEvent?.recordedAt,
+          remainingQuantity: med.remainingQuantity,
         });
       }
     }
 
-    // Sort items by scheduledTime ascending
+    // Sort chronologically by scheduled time
     scheduleItems.sort((a, b) => a.scheduledTime.localeCompare(b.scheduledTime));
 
-    // Calculate adherence statistics
-    const total = scheduleItems.length;
-    const taken = scheduleItems.filter((i) => i.status === 'taken').length;
-    const missed = scheduleItems.filter((i) => i.status === 'missed').length;
-    const scheduled = scheduleItems.filter((i) => i.status === 'scheduled').length;
-    const adherenceRate = total > 0 ? Math.round((taken / total) * 100) : 100;
+    const totalCount = scheduleItems.length;
+    const completedCount = scheduleItems.filter((i) => i.status === 'taken').length;
+    const adherenceScore = totalCount > 0 ? Math.round((completedCount / totalCount) * 100) : 100;
 
     return NextResponse.json({
       date: targetDate,
+      careProfileId,
+      schedule: scheduleItems,
       items: scheduleItems,
-      summary: {
-        total,
-        taken,
-        missed,
-        scheduled,
-        adherenceRate,
-      },
+      totalCount,
+      completedCount,
+      adherenceScore,
     });
   } catch (err: any) {
     console.error('[API Doses Today] Error:', err);

@@ -1,10 +1,9 @@
 import { NextResponse } from 'next/server';
-import { getCurrentUser, verifyMembership, canManageMedications } from '@/lib/auth';
+import { authenticateRequest, canManageMedications } from '@/lib/auth';
 import { 
   getMedicationsCollection, 
   getNotificationsCollection, 
-  logAudit, 
-  SEED_IDS 
+  logAudit 
 } from '@/lib/db';
 import { MedicationUpdateSchema } from '@/lib/validations';
 import { Medication, NotificationRecord } from '@/types';
@@ -15,8 +14,12 @@ interface RouteContext {
 
 export async function GET(request: Request, context: RouteContext) {
   try {
+    const auth = await authenticateRequest(request);
+    if (!auth.authenticated || !auth.householdId) {
+      return NextResponse.json({ error: auth.error || 'Unauthorized' }, { status: auth.statusCode || 401 });
+    }
+
     const { id } = await context.params;
-    const user = await getCurrentUser(request);
     const medicationsCol = await getMedicationsCollection();
     const medication = await medicationsCol.findOne({ _id: id });
 
@@ -24,11 +27,9 @@ export async function GET(request: Request, context: RouteContext) {
       return NextResponse.json({ error: 'Medication not found' }, { status: 404 });
     }
 
-    if (user && medication.careProfileId !== SEED_IDS.PROFILE_MEERA) {
-      const { isMember } = await verifyMembership(user._id, medication.careProfileId);
-      if (!isMember) {
-        return NextResponse.json({ error: 'Forbidden: Access denied' }, { status: 403 });
-      }
+    // Strict multi-tenant IDOR check: Household isolation
+    if (medication.householdId && medication.householdId !== auth.householdId) {
+      return NextResponse.json({ error: 'Forbidden: Access denied' }, { status: 403 });
     }
 
     return NextResponse.json({ medication });
@@ -40,29 +41,29 @@ export async function GET(request: Request, context: RouteContext) {
 
 export async function PUT(request: Request, context: RouteContext) {
   try {
-    const { id } = await context.params;
-    const user = await getCurrentUser(request);
-    if (!user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    const auth = await authenticateRequest(request);
+    if (!auth.authenticated || !auth.user || !auth.householdId) {
+      return NextResponse.json({ error: auth.error || 'Unauthorized' }, { status: auth.statusCode || 401 });
     }
 
+    if (!canManageMedications(auth.role)) {
+      return NextResponse.json(
+        { error: 'Forbidden: Only owners, family coordinators, and caregivers can modify medications' },
+        { status: 403 }
+      );
+    }
+
+    const { id } = await context.params;
     const medicationsCol = await getMedicationsCollection();
     const existing = await medicationsCol.findOne({ _id: id });
+
     if (!existing) {
       return NextResponse.json({ error: 'Medication not found' }, { status: 404 });
     }
 
-    const { isMember, role } = await verifyMembership(user._id, existing.careProfileId);
-    if (existing.careProfileId !== SEED_IDS.PROFILE_MEERA && !isMember) {
+    // IDOR Protection: Verify household ownership
+    if (existing.householdId && existing.householdId !== auth.householdId) {
       return NextResponse.json({ error: 'Forbidden: Access denied' }, { status: 403 });
-    }
-
-    const effectiveRole = role || user.role;
-    if (!canManageMedications(effectiveRole)) {
-      return NextResponse.json(
-        { error: 'Forbidden: Only caregivers and primary caregivers can modify medications' },
-        { status: 403 }
-      );
     }
 
     const json = await request.json();
@@ -89,6 +90,7 @@ export async function PUT(request: Request, context: RouteContext) {
     ) {
       const notifsCol = await getNotificationsCollection();
       const existingRefillNotif = await notifsCol.findOne({
+        householdId: auth.householdId,
         careProfileId: updated.careProfileId,
         type: 'refill',
         status: 'unread',
@@ -98,6 +100,7 @@ export async function PUT(request: Request, context: RouteContext) {
       if (!existingRefillNotif) {
         const refillNotif: NotificationRecord = {
           _id: `notif_${Date.now()}_refill`,
+          householdId: auth.householdId,
           careProfileId: updated.careProfileId,
           title: `Low Inventory Alert: ${updated.medicineName}`,
           message: `${updated.medicineName} has only ${updated.remainingQuantity} units remaining (Threshold: ${updated.refillThreshold}). Please arrange a refill.`,
@@ -112,10 +115,11 @@ export async function PUT(request: Request, context: RouteContext) {
     }
 
     await logAudit({
+      householdId: auth.householdId,
       careProfileId: existing.careProfileId,
-      actorId: user._id,
-      actorName: user.name,
-      actorRole: effectiveRole,
+      actorId: auth.user._id,
+      actorName: auth.user.name,
+      actorRole: auth.role || 'OWNER',
       action: 'UPDATE_MEDICATION',
       entityType: 'medication',
       entityId: id,
@@ -131,29 +135,29 @@ export async function PUT(request: Request, context: RouteContext) {
 
 export async function DELETE(request: Request, context: RouteContext) {
   try {
-    const { id } = await context.params;
-    const user = await getCurrentUser(request);
-    if (!user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    const auth = await authenticateRequest(request);
+    if (!auth.authenticated || !auth.user || !auth.householdId) {
+      return NextResponse.json({ error: auth.error || 'Unauthorized' }, { status: auth.statusCode || 401 });
     }
 
+    if (!canManageMedications(auth.role)) {
+      return NextResponse.json(
+        { error: 'Forbidden: Only owners, family coordinators, and caregivers can discontinue medications' },
+        { status: 403 }
+      );
+    }
+
+    const { id } = await context.params;
     const medicationsCol = await getMedicationsCollection();
     const existing = await medicationsCol.findOne({ _id: id });
+
     if (!existing) {
       return NextResponse.json({ error: 'Medication not found' }, { status: 404 });
     }
 
-    const { isMember, role } = await verifyMembership(user._id, existing.careProfileId);
-    if (existing.careProfileId !== SEED_IDS.PROFILE_MEERA && !isMember) {
+    // IDOR Protection: Verify household ownership
+    if (existing.householdId && existing.householdId !== auth.householdId) {
       return NextResponse.json({ error: 'Forbidden: Access denied' }, { status: 403 });
-    }
-
-    const effectiveRole = role || user.role;
-    if (!canManageMedications(effectiveRole)) {
-      return NextResponse.json(
-        { error: 'Forbidden: Only caregivers and primary caregivers can discontinue medications' },
-        { status: 403 }
-      );
     }
 
     const now = new Date().toISOString();
@@ -164,10 +168,11 @@ export async function DELETE(request: Request, context: RouteContext) {
     );
 
     await logAudit({
+      householdId: auth.householdId,
       careProfileId: existing.careProfileId,
-      actorId: user._id,
-      actorName: user.name,
-      actorRole: effectiveRole,
+      actorId: auth.user._id,
+      actorName: auth.user.name,
+      actorRole: auth.role || 'OWNER',
       action: 'DISCONTINUE_MEDICATION',
       entityType: 'medication',
       entityId: id,

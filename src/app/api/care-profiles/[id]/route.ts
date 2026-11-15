@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
-import { getCurrentUser, verifyMembership } from '@/lib/auth';
-import { getCareProfilesCollection, getCareMembershipsCollection, logAudit, SEED_IDS } from '@/lib/db';
+import { authenticateRequest } from '@/lib/auth';
+import { getCareProfilesCollection, getCareMembershipsCollection, logAudit } from '@/lib/db';
 import { CareProfileUpdateSchema } from '@/lib/validations';
 
 interface RouteContext {
@@ -9,9 +9,12 @@ interface RouteContext {
 
 export async function GET(request: Request, context: RouteContext) {
   try {
-    const { id } = await context.params;
-    const user = await getCurrentUser(request);
+    const auth = await authenticateRequest(request);
+    if (!auth.authenticated || !auth.householdId) {
+      return NextResponse.json({ error: auth.error || 'Unauthorized' }, { status: auth.statusCode || 401 });
+    }
 
+    const { id } = await context.params;
     const profilesCol = await getCareProfilesCollection();
     const profile = await profilesCol.findOne({ _id: id });
 
@@ -19,11 +22,9 @@ export async function GET(request: Request, context: RouteContext) {
       return NextResponse.json({ error: 'Care profile not found' }, { status: 404 });
     }
 
-    if (user && id !== SEED_IDS.PROFILE_MEERA) {
-      const { isMember } = await verifyMembership(user._id, id);
-      if (!isMember) {
-        return NextResponse.json({ error: 'Forbidden: Access denied to this care circle' }, { status: 403 });
-      }
+    // Strict multi-tenant IDOR check
+    if (profile.householdId && profile.householdId !== auth.householdId) {
+      return NextResponse.json({ error: 'Forbidden: Access denied to this care circle' }, { status: 403 });
     }
 
     const membershipsCol = await getCareMembershipsCollection();
@@ -38,14 +39,21 @@ export async function GET(request: Request, context: RouteContext) {
 
 export async function PUT(request: Request, context: RouteContext) {
   try {
-    const { id } = await context.params;
-    const user = await getCurrentUser(request);
-    if (!user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    const auth = await authenticateRequest(request);
+    if (!auth.authenticated || !auth.user || !auth.householdId) {
+      return NextResponse.json({ error: auth.error || 'Unauthorized' }, { status: auth.statusCode || 401 });
     }
 
-    const { isMember, role } = await verifyMembership(user._id, id);
-    if (!isMember && id !== SEED_IDS.PROFILE_MEERA) {
+    const { id } = await context.params;
+    const profilesCol = await getCareProfilesCollection();
+    const existing = await profilesCol.findOne({ _id: id });
+
+    if (!existing) {
+      return NextResponse.json({ error: 'Care profile not found' }, { status: 404 });
+    }
+
+    // IDOR Protection: verify household
+    if (existing.householdId && existing.householdId !== auth.householdId) {
       return NextResponse.json({ error: 'Forbidden: Access denied to this care circle' }, { status: 403 });
     }
 
@@ -53,12 +61,6 @@ export async function PUT(request: Request, context: RouteContext) {
     const result = CareProfileUpdateSchema.safeParse(json);
     if (!result.success) {
       return NextResponse.json({ error: 'Validation error', details: result.error.flatten() }, { status: 400 });
-    }
-
-    const profilesCol = await getCareProfilesCollection();
-    const existing = await profilesCol.findOne({ _id: id });
-    if (!existing) {
-      return NextResponse.json({ error: 'Care profile not found' }, { status: 404 });
     }
 
     const now = new Date().toISOString();
@@ -71,10 +73,11 @@ export async function PUT(request: Request, context: RouteContext) {
     const updated = await profilesCol.findOne({ _id: id });
 
     await logAudit({
+      householdId: auth.householdId,
       careProfileId: id,
-      actorId: user._id,
-      actorName: user.name,
-      actorRole: role || user.role,
+      actorId: auth.user._id,
+      actorName: auth.user.name,
+      actorRole: auth.role || 'OWNER',
       action: 'UPDATE_CARE_PROFILE',
       entityType: 'careProfile',
       entityId: id,

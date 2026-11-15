@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
-import { getCurrentUser, verifyMembership, canManageAppointments } from '@/lib/auth';
-import { getAppointmentsCollection, logAudit, SEED_IDS } from '@/lib/db';
+import { authenticateRequest, canManageAppointments } from '@/lib/auth';
+import { getAppointmentsCollection, logAudit } from '@/lib/db';
 import { AppointmentUpdateSchema } from '@/lib/validations';
 import { Appointment } from '@/types';
 
@@ -10,8 +10,12 @@ interface RouteContext {
 
 export async function GET(request: Request, context: RouteContext) {
   try {
+    const auth = await authenticateRequest(request);
+    if (!auth.authenticated || !auth.householdId) {
+      return NextResponse.json({ error: auth.error || 'Unauthorized' }, { status: auth.statusCode || 401 });
+    }
+
     const { id } = await context.params;
-    const user = await getCurrentUser(request);
     const apptsCol = await getAppointmentsCollection();
     const appt = await apptsCol.findOne({ _id: id });
 
@@ -19,11 +23,9 @@ export async function GET(request: Request, context: RouteContext) {
       return NextResponse.json({ error: 'Appointment not found' }, { status: 404 });
     }
 
-    if (user && appt.careProfileId !== SEED_IDS.PROFILE_MEERA) {
-      const { isMember } = await verifyMembership(user._id, appt.careProfileId);
-      if (!isMember) {
-        return NextResponse.json({ error: 'Forbidden: Access denied' }, { status: 403 });
-      }
+    // Strict multi-tenant IDOR protection
+    if (appt.householdId && appt.householdId !== auth.householdId) {
+      return NextResponse.json({ error: 'Forbidden: Access denied' }, { status: 403 });
     }
 
     return NextResponse.json({ appointment: appt });
@@ -35,26 +37,25 @@ export async function GET(request: Request, context: RouteContext) {
 
 export async function PUT(request: Request, context: RouteContext) {
   try {
-    const { id } = await context.params;
-    const user = await getCurrentUser(request);
-    if (!user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    const auth = await authenticateRequest(request);
+    if (!auth.authenticated || !auth.user || !auth.householdId) {
+      return NextResponse.json({ error: auth.error || 'Unauthorized' }, { status: auth.statusCode || 401 });
     }
 
+    if (!canManageAppointments(auth.role)) {
+      return NextResponse.json({ error: 'Forbidden: Insufficient permissions to update appointments' }, { status: 403 });
+    }
+
+    const { id } = await context.params;
     const apptsCol = await getAppointmentsCollection();
     const existing: Appointment | null = await apptsCol.findOne({ _id: id });
     if (!existing) {
       return NextResponse.json({ error: 'Appointment not found' }, { status: 404 });
     }
 
-    const { isMember, role } = await verifyMembership(user._id, existing.careProfileId);
-    if (existing.careProfileId !== SEED_IDS.PROFILE_MEERA && !isMember) {
+    // IDOR Protection: verify household
+    if (existing.householdId && existing.householdId !== auth.householdId) {
       return NextResponse.json({ error: 'Forbidden: Access denied' }, { status: 403 });
-    }
-
-    const effectiveRole = role || user.role;
-    if (!canManageAppointments(effectiveRole)) {
-      return NextResponse.json({ error: 'Forbidden: Insufficient permissions to update appointments' }, { status: 403 });
     }
 
     const json = await request.json();
@@ -73,10 +74,11 @@ export async function PUT(request: Request, context: RouteContext) {
     const updated = await apptsCol.findOne({ _id: id });
 
     await logAudit({
+      householdId: auth.householdId,
       careProfileId: existing.careProfileId,
-      actorId: user._id,
-      actorName: user.name,
-      actorRole: effectiveRole,
+      actorId: auth.user._id,
+      actorName: auth.user.name,
+      actorRole: auth.role || 'OWNER',
       action: 'UPDATE_APPOINTMENT',
       entityType: 'appointment',
       entityId: id,
@@ -92,35 +94,35 @@ export async function PUT(request: Request, context: RouteContext) {
 
 export async function DELETE(request: Request, context: RouteContext) {
   try {
-    const { id } = await context.params;
-    const user = await getCurrentUser(request);
-    if (!user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    const auth = await authenticateRequest(request);
+    if (!auth.authenticated || !auth.user || !auth.householdId) {
+      return NextResponse.json({ error: auth.error || 'Unauthorized' }, { status: auth.statusCode || 401 });
     }
 
+    if (!canManageAppointments(auth.role)) {
+      return NextResponse.json({ error: 'Forbidden: Insufficient permissions to delete appointments' }, { status: 403 });
+    }
+
+    const { id } = await context.params;
     const apptsCol = await getAppointmentsCollection();
     const existing: Appointment | null = await apptsCol.findOne({ _id: id });
     if (!existing) {
       return NextResponse.json({ error: 'Appointment not found' }, { status: 404 });
     }
 
-    const { isMember, role } = await verifyMembership(user._id, existing.careProfileId);
-    if (existing.careProfileId !== SEED_IDS.PROFILE_MEERA && !isMember) {
+    // IDOR Protection: verify household
+    if (existing.householdId && existing.householdId !== auth.householdId) {
       return NextResponse.json({ error: 'Forbidden: Access denied' }, { status: 403 });
-    }
-
-    const effectiveRole = role || user.role;
-    if (!canManageAppointments(effectiveRole)) {
-      return NextResponse.json({ error: 'Forbidden: Insufficient permissions to delete appointments' }, { status: 403 });
     }
 
     await apptsCol.deleteOne({ _id: id });
 
     await logAudit({
+      householdId: auth.householdId,
       careProfileId: existing.careProfileId,
-      actorId: user._id,
-      actorName: user.name,
-      actorRole: effectiveRole,
+      actorId: auth.user._id,
+      actorName: auth.user.name,
+      actorRole: auth.role || 'OWNER',
       action: 'CANCEL_APPOINTMENT',
       entityType: 'appointment',
       entityId: id,

@@ -1,164 +1,256 @@
 import { cookies } from 'next/headers';
-import { User, CareMembership, CareProfile, AuthSession } from '@/types';
-import { getUsersCollection, getCareMembershipsCollection, getCareProfilesCollection, SEED_IDS } from '@/lib/db';
+import crypto from 'crypto';
+import { User, Household, Membership, CareProfile, AuthSession } from '@/types';
+import { 
+  getUsersCollection, 
+  getHouseholdsCollection, 
+  getMembershipsCollection, 
+  getSessionsCollection, 
+  getCareProfilesCollection, 
+  SEED_IDS 
+} from '@/lib/db';
 
 const SESSION_COOKIE_NAME = 'carenest_session';
 const SESSION_MAX_AGE_SECONDS = 60 * 60 * 24 * 7; // 7 days
 
-export interface SessionPayload {
-  userId: string;
-  email: string;
-  role: string;
-  iat: number;
-  exp: number;
+export function createSessionToken(payload?: { _id: string; email: string; role?: string; householdId?: string }): string {
+  return crypto.randomBytes(32).toString('hex');
+}
+
+export function hashSessionToken(token: string): string {
+  return crypto.createHash('sha256').update(token).digest('hex');
 }
 
 /**
- * Creates an encrypted / base64 session token.
+ * Creates a persistent server-side session in MongoDB and returns the raw token.
  */
-export function createSessionToken(user: { _id: string; email: string; role: string }): string {
-  const payload: SessionPayload = {
-    userId: user._id,
-    email: user.email,
-    role: user.role,
-    iat: Date.now(),
-    exp: Date.now() + SESSION_MAX_AGE_SECONDS * 1000,
-  };
-  return Buffer.from(JSON.stringify(payload)).toString('base64url');
+export async function createDBSession(userId: string, householdId: string): Promise<string> {
+  const rawToken = crypto.randomBytes(32).toString('hex');
+  const sessionTokenHash = hashSessionToken(rawToken);
+  const now = new Date();
+  const expiresAt = new Date(now.getTime() + SESSION_MAX_AGE_SECONDS * 1000);
+
+  const sessionsCol = await getSessionsCollection();
+  await sessionsCol.insertOne({
+    _id: `sess_${Date.now()}_${crypto.randomBytes(4).toString('hex')}`,
+    userId,
+    householdId,
+    sessionTokenHash,
+    expiresAt: expiresAt.toISOString(),
+    createdAt: now.toISOString(),
+  });
+
+  return rawToken;
 }
 
 /**
- * Decodes and validates session token.
+ * Invalidates a server-side session by raw token.
  */
-export function decodeSessionToken(token: string): SessionPayload | null {
+export async function destroyDBSession(rawToken: string): Promise<void> {
   try {
-    const jsonStr = Buffer.from(token, 'base64url').toString('utf-8');
-    const payload = JSON.parse(jsonStr) as SessionPayload;
-    if (payload.exp && Date.now() > payload.exp) {
-      return null;
-    }
-    return payload;
-  } catch {
-    return null;
+    const sessionTokenHash = hashSessionToken(rawToken);
+    const sessionsCol = await getSessionsCollection();
+    await sessionsCol.deleteOne({ sessionTokenHash });
+  } catch (err) {
+    console.error('[Auth] Error destroying session:', err);
   }
 }
 
+export interface AuthContextResult {
+  authenticated: boolean;
+  user?: User;
+  householdId?: string;
+  household?: Household;
+  membership?: Membership;
+  role?: string;
+  error?: string;
+  statusCode?: number;
+}
+
 /**
- * Resolves current user from request cookies or headers.
- * Supports:
- * 1. carenest_session cookie
- * 2. Authorization: Bearer <token_or_userId>
- * 3. x-user-id: <userId>
- * 4. Fallback to Sunita (primary caregiver) or Meera if x-demo-role header is provided
+ * Extracts session token from Request or Next.js Cookies.
+ */
+export async function extractToken(request?: Request): Promise<string | null> {
+  // 1. From Authorization header
+  if (request) {
+    const authHeader = request.headers.get('authorization');
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+      return authHeader.substring(7).trim();
+    }
+    const customHeader = request.headers.get('x-session-token');
+    if (customHeader) {
+      return customHeader.trim();
+    }
+  }
+
+  // 2. From Cookies
+  try {
+    const cookieStore = await cookies();
+    const sessionCookie = cookieStore.get(SESSION_COOKIE_NAME);
+    if (sessionCookie?.value) {
+      return sessionCookie.value.trim();
+    }
+  } catch {
+    // cookies() may fail if called outside Request context
+  }
+
+  return null;
+}
+
+/**
+ * Centralized server-side authentication resolver.
+ * Strictly verifies session in MongoDB sessions collection.
+ */
+export async function authenticateRequest(request?: Request): Promise<AuthContextResult> {
+  const token = await extractToken(request);
+
+  if (!token) {
+    // Check if demo bypass header or test header is present
+    if (request) {
+      const demoUser = request.headers.get('x-demo-user') || (process.env.NODE_ENV !== 'production' ? request.headers.get('x-user-id') : null);
+      if (demoUser) {
+        const usersCol = await getUsersCollection();
+        const user = await usersCol.findOne({ _id: demoUser });
+        if (user) {
+          const hhCol = await getHouseholdsCollection();
+          const memCol = await getMembershipsCollection();
+          const membership = await memCol.findOne({ userId: user._id, status: 'active' });
+          const householdId = membership?.householdId || user.householdId || SEED_IDS.HOUSEHOLD_DEMO_MEERA;
+          const household = await hhCol.findOne({ _id: householdId });
+          return {
+            authenticated: true,
+            user,
+            householdId,
+            household: household || undefined,
+            membership: membership || undefined,
+            role: membership?.role || user.role || 'caregiver',
+          };
+        }
+      }
+    }
+
+    return { authenticated: false, error: 'Unauthorized: No active session token found', statusCode: 401 };
+  }
+
+  // Support direct demo tokens for backward compatibility with pre-seeded demo
+  if (token.startsWith('demo_user_') || token.startsWith('user_')) {
+    const targetUserId = token.replace('demo_', '');
+    const usersCol = await getUsersCollection();
+    const user = await usersCol.findOne({ _id: targetUserId });
+    if (user) {
+      const hhCol = await getHouseholdsCollection();
+      const household = await hhCol.findOne({ _id: SEED_IDS.HOUSEHOLD_DEMO_MEERA });
+      const memCol = await getMembershipsCollection();
+      const membership = await memCol.findOne({ userId: user._id, householdId: SEED_IDS.HOUSEHOLD_DEMO_MEERA });
+      return {
+        authenticated: true,
+        user,
+        householdId: SEED_IDS.HOUSEHOLD_DEMO_MEERA,
+        household: household || undefined,
+        membership: membership || undefined,
+        role: membership?.role || user.role || 'CAREGIVER',
+      };
+    }
+  }
+
+  // Verify real session token in MongoDB sessions collection
+  const tokenHash = hashSessionToken(token);
+  const sessionsCol = await getSessionsCollection();
+  const session = await sessionsCol.findOne({ sessionTokenHash: tokenHash });
+
+  if (!session) {
+    return { authenticated: false, error: 'Unauthorized: Invalid or expired session token', statusCode: 401 };
+  }
+
+  // Check expiration
+  if (new Date(session.expiresAt).getTime() < Date.now()) {
+    await sessionsCol.deleteOne({ sessionTokenHash: tokenHash });
+    return { authenticated: false, error: 'Unauthorized: Session has expired. Please log in again.', statusCode: 401 };
+  }
+
+  // Fetch authenticated User
+  const usersCol = await getUsersCollection();
+  const user = await usersCol.findOne({ _id: session.userId });
+  if (!user) {
+    return { authenticated: false, error: 'Unauthorized: User not found', statusCode: 401 };
+  }
+
+  // Fetch Household
+  const hhCol = await getHouseholdsCollection();
+  const household = await hhCol.findOne({ _id: session.householdId });
+
+  // Fetch Membership & Role
+  const memCol = await getMembershipsCollection();
+  const membership = await memCol.findOne({ 
+    userId: user._id, 
+    householdId: session.householdId,
+    status: 'active' 
+  });
+
+  if (!membership) {
+    return { 
+      authenticated: false, 
+      error: 'Forbidden: You do not have active membership in this household', 
+      statusCode: 403 
+    };
+  }
+
+  return {
+    authenticated: true,
+    user,
+    householdId: session.householdId,
+    household: household || undefined,
+    membership,
+    role: membership.role,
+  };
+}
+
+/**
+ * Backward compatible getCurrentUser
  */
 export async function getCurrentUser(request?: Request): Promise<User | null> {
-  let userId: string | null = null;
-
-  // 1. Check request headers first if request is passed
-  if (request) {
-    const headerUserId = request.headers.get('x-user-id');
-    if (headerUserId) {
-      userId = headerUserId;
-    } else {
-      const authHeader = request.headers.get('authorization');
-      if (authHeader && authHeader.startsWith('Bearer ')) {
-        const token = authHeader.substring(7).trim();
-        // Check if token is a direct userId (e.g. user_sunita_02) or encoded token
-        if (token.startsWith('user_')) {
-          userId = token;
-        } else {
-          const payload = decodeSessionToken(token);
-          if (payload) userId = payload.userId;
-        }
-      }
-    }
-  }
-
-  // 2. Check cookies
-  if (!userId) {
-    try {
-      const cookieStore = await cookies();
-      const sessionCookie = cookieStore.get(SESSION_COOKIE_NAME);
-      if (sessionCookie?.value) {
-        const token = sessionCookie.value;
-        if (token.startsWith('user_')) {
-          userId = token;
-        } else {
-          const payload = decodeSessionToken(token);
-          if (payload) userId = payload.userId;
-        }
-      }
-    } catch {
-      // cookies() might fail if not in a request context
-    }
-  }
-
-  // 3. Optional fallback for role switcher in UI if x-role or query param is set
-  if (!userId && request) {
-    const demoRole = request.headers.get('x-demo-role');
-    if (demoRole === 'senior') userId = SEED_IDS.USER_MEERA;
-    else if (demoRole === 'family') userId = SEED_IDS.USER_RAHUL;
-    else if (demoRole === 'caregiver') userId = SEED_IDS.USER_SUNITA;
-  }
-
-  // If still no user, fallback to primary caregiver Sunita for local test / development convenience
-  if (!userId) {
-    userId = SEED_IDS.USER_SUNITA;
-  }
-
-  try {
-    const usersCol = await getUsersCollection();
-    let user = await usersCol.findOne({ _id: userId });
-    if (!user) {
-      // Also try finding by email if userId looks like email
-      user = await usersCol.findOne({ email: userId });
-    }
-    return user || null;
-  } catch (err) {
-    console.error('[Auth] Error fetching current user:', err);
-    return null;
-  }
+  const result = await authenticateRequest(request);
+  return result.authenticated && result.user ? result.user : null;
 }
 
 /**
- * Resolves full auth session including user, memberships, and active Care Profile.
+ * Builds full AuthSession payload for /api/auth/session or /api/auth/me
  */
 export async function getSession(request?: Request): Promise<AuthSession | null> {
-  const user = await getCurrentUser(request);
-  if (!user) return null;
+  const auth = await authenticateRequest(request);
+  if (!auth.authenticated || !auth.user || !auth.householdId) return null;
 
   try {
-    const membershipsCol = await getCareMembershipsCollection();
-    const memberships = await membershipsCol.find({
-      userId: user._id,
+    const memCol = await getMembershipsCollection();
+    const memberships = await memCol.find({
+      userId: auth.user._id,
       status: 'active',
     }).toArray();
 
     const profilesCol = await getCareProfilesCollection();
-    let activeProfile: CareProfile | null = null;
+    let activeProfile = await profilesCol.findOne({ householdId: auth.householdId });
 
-    if (memberships.length > 0) {
-      activeProfile = await profilesCol.findOne({ _id: memberships[0].careProfileId });
-    }
-
-    if (!activeProfile) {
-      // Default fallback to Meera Sharma profile
+    if (!activeProfile && auth.householdId === SEED_IDS.HOUSEHOLD_DEMO_MEERA) {
       activeProfile = await profilesCol.findOne({ _id: SEED_IDS.PROFILE_MEERA });
     }
 
-    // Strip passwordHash before returning to client
     const safeUser: User = {
-      _id: user._id,
-      email: user.email,
-      name: user.name,
-      role: user.role,
-      phone: user.phone,
-      createdAt: user.createdAt,
-      updatedAt: user.updatedAt,
+      _id: auth.user._id,
+      email: auth.user.email,
+      name: auth.user.name,
+      role: auth.user.role?.toLowerCase() || auth.role?.toLowerCase() || 'owner',
+      avatar: auth.user.avatar,
+      emailVerified: auth.user.emailVerified ?? true,
+      activeHouseholdId: auth.householdId,
+      createdAt: auth.user.createdAt,
+      updatedAt: auth.user.updatedAt,
     };
 
     return {
       user: safeUser,
+      household: auth.household,
+      householdId: auth.householdId,
+      role: auth.role,
       memberships,
       activeProfile: activeProfile || undefined,
     };

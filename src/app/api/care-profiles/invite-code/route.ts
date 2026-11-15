@@ -45,7 +45,7 @@ export async function POST(request: Request) {
       careProfileId,
       actorId: user._id,
       actorName: user.name,
-      actorRole: role || user.role,
+      actorRole: role || user.role || 'caregiver',
       action: 'REGENERATE_INVITE_CODE',
       entityType: 'careProfile',
       entityId: careProfileId,

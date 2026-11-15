@@ -1,5 +1,7 @@
 import { 
   User, 
+  Household,
+  Membership,
   CareProfile, 
   CareMembership, 
   Medication, 
@@ -16,6 +18,10 @@ export const SEED_IDS = {
   USER_MEERA: 'user_meera_01',
   USER_SUNITA: 'user_sunita_02',
   USER_RAHUL: 'user_rahul_03',
+  HOUSEHOLD_DEMO_MEERA: 'household_demo_meera_01',
+  MEMBERSHIP_RAHUL_HH: 'membership_hh_rahul_03',
+  MEMBERSHIP_SUNITA_HH: 'membership_hh_sunita_02',
+  MEMBERSHIP_MEERA_HH: 'membership_hh_meera_01',
   PROFILE_MEERA: 'profile_meera_sharma_01',
   MEMBERSHIP_MEERA: 'membership_meera_01',
   MEMBERSHIP_SUNITA: 'membership_sunita_02',
@@ -76,14 +82,62 @@ export function getDeterministicSeedData() {
       role: 'family',
       phone: '+91 98765 43210',
       passwordHash: SEED_IDS.PASSWORD_HASH,
+      activeHouseholdId: SEED_IDS.HOUSEHOLD_DEMO_MEERA,
       createdAt: '2026-01-15T08:30:00.000Z',
       updatedAt: '2026-01-15T08:30:00.000Z',
+    },
+  ];
+
+  const households: Household[] = [
+    {
+      _id: SEED_IDS.HOUSEHOLD_DEMO_MEERA,
+      name: 'Meera Sharma Family Care',
+      ownerId: SEED_IDS.USER_SUNITA,
+      createdAt: '2026-01-15T08:00:00.000Z',
+      updatedAt: '2026-01-15T08:00:00.000Z',
+    },
+  ];
+
+  const memberships: Membership[] = [
+    {
+      _id: SEED_IDS.MEMBERSHIP_RAHUL_HH,
+      userId: SEED_IDS.USER_RAHUL,
+      householdId: SEED_IDS.HOUSEHOLD_DEMO_MEERA,
+      role: 'family',
+      status: 'active',
+      joinedAt: '2026-01-15T08:00:00.000Z',
+      createdAt: '2026-01-15T08:00:00.000Z',
+      userName: 'Rahul Sharma (Son / Family)',
+      userEmail: 'rahul@carenest.local',
+    },
+    {
+      _id: SEED_IDS.MEMBERSHIP_SUNITA_HH,
+      userId: SEED_IDS.USER_SUNITA,
+      householdId: SEED_IDS.HOUSEHOLD_DEMO_MEERA,
+      role: 'CAREGIVER',
+      status: 'active',
+      joinedAt: '2026-01-16T09:00:00.000Z',
+      createdAt: '2026-01-16T09:00:00.000Z',
+      userName: 'Sunita Verma (Caregiver)',
+      userEmail: 'sunita@carenest.local',
+    },
+    {
+      _id: SEED_IDS.MEMBERSHIP_MEERA_HH,
+      userId: SEED_IDS.USER_MEERA,
+      householdId: SEED_IDS.HOUSEHOLD_DEMO_MEERA,
+      role: 'SENIOR',
+      status: 'active',
+      joinedAt: '2026-01-15T08:00:00.000Z',
+      createdAt: '2026-01-15T08:00:00.000Z',
+      userName: 'Meera Sharma (Senior)',
+      userEmail: 'meera@carenest.local',
     },
   ];
 
   const careProfiles: CareProfile[] = [
     {
       _id: SEED_IDS.PROFILE_MEERA,
+      householdId: SEED_IDS.HOUSEHOLD_DEMO_MEERA,
       fullName: 'Meera Sharma',
       preferredName: 'Meera ji',
       age: 72,
@@ -483,8 +537,20 @@ export function getDeterministicSeedData() {
     },
   ];
 
+  // Attach householdId to all demo records
+  careMemberships.forEach(cm => { cm.householdId = SEED_IDS.HOUSEHOLD_DEMO_MEERA; });
+  medications.forEach(m => { m.householdId = SEED_IDS.HOUSEHOLD_DEMO_MEERA; });
+  doseEvents.forEach(d => { d.householdId = SEED_IDS.HOUSEHOLD_DEMO_MEERA; });
+  appointments.forEach(a => { a.householdId = SEED_IDS.HOUSEHOLD_DEMO_MEERA; });
+  healthLogs.forEach(h => { h.householdId = SEED_IDS.HOUSEHOLD_DEMO_MEERA; });
+  caregiverNotes.forEach(c => { c.householdId = SEED_IDS.HOUSEHOLD_DEMO_MEERA; });
+  notifications.forEach(n => { n.householdId = SEED_IDS.HOUSEHOLD_DEMO_MEERA; });
+  auditLogs.forEach(a => { a.householdId = SEED_IDS.HOUSEHOLD_DEMO_MEERA; });
+
   return {
     users,
+    households,
+    memberships,
     careProfiles,
     careMemberships,
     medications,

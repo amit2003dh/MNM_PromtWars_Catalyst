@@ -345,6 +345,10 @@ export class MockDatabase {
     if (this.initialized) return;
     const seed = getDeterministicSeedData();
     this.collections.set('users', new MockCollection('users', seed.users));
+    this.collections.set('households', new MockCollection('households', seed.households));
+    this.collections.set('memberships', new MockCollection('memberships', seed.memberships));
+    this.collections.set('otpVerifications', new MockCollection('otpVerifications', []));
+    this.collections.set('sessions', new MockCollection('sessions', []));
     this.collections.set('careProfiles', new MockCollection('careProfiles', seed.careProfiles));
     this.collections.set('careMemberships', new MockCollection('careMemberships', seed.careMemberships));
     this.collections.set('medications', new MockCollection('medications', seed.medications));

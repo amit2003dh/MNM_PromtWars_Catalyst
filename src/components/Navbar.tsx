@@ -13,6 +13,9 @@ import {
   X,
   PhoneCall,
   Sparkles,
+  LogOut,
+  LogIn,
+  Home,
 } from 'lucide-react';
 import { useCare } from '@/context/CareContext';
 import { UserRole } from '@/types';
@@ -21,6 +24,9 @@ export default function Navbar() {
   const pathname = usePathname();
   const {
     user,
+    household,
+    isAuthenticated,
+    isDemoMode,
     careProfile,
     seniorMode,
     setSeniorMode,
@@ -28,6 +34,7 @@ export default function Navbar() {
     triggerEmergency,
     emergencyAlertActive,
     clearEmergencyAlert,
+    logout,
   } = useCare();
 
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -112,52 +119,107 @@ export default function Navbar() {
               </span>
             </button>
 
-            {/* Role Switcher Pill */}
-            <div className="relative">
-              <button
-                type="button"
-                onClick={() => setRoleDropdownOpen(!roleDropdownOpen)}
-                className="flex items-center gap-2 px-3 py-1.5 md:px-3.5 md:py-2 rounded-2xl bg-white border border-slate-200 hover:border-slate-300 text-slate-800 text-xs md:text-sm font-semibold shadow-xs"
-              >
-                <UserCheck className="w-4 h-4 text-nest-600" />
-                <span className="hidden sm:inline font-bold">{user.name}</span>
-                <span className="sm:hidden font-bold">{user.role}</span>
-                <span className="text-[10px] px-1.5 py-0.5 bg-nest-100 text-nest-800 rounded-md uppercase font-bold">
-                  {user.role}
-                </span>
-              </button>
-
-              {roleDropdownOpen && (
-                <div
-                  className="absolute right-0 mt-2 w-72 rounded-2xl bg-white border border-slate-200 shadow-xl p-2 z-50 animate-in fade-in zoom-in-95 duration-150"
-                  onClick={() => setRoleDropdownOpen(false)}
-                >
-                  <div className="px-3 py-2 text-xs font-bold text-slate-400 uppercase tracking-wider">
-                    Switch Active Demo Persona
-                  </div>
-                  {roles.map((r) => (
-                    <button
-                      key={r.role}
-                      type="button"
-                      onClick={() => switchUserRole(r.role)}
-                      className={`w-full text-left p-2.5 rounded-xl text-xs md:text-sm transition-all flex items-center justify-between ${
-                        user.role === r.role
-                          ? 'bg-nest-50 text-nest-950 font-bold border border-nest-200'
-                          : 'hover:bg-slate-50 text-slate-700'
-                      }`}
-                    >
-                      <div>
-                        <div className="font-bold">{r.label}</div>
-                        <div className="text-[11px] text-slate-500">{r.desc}</div>
-                      </div>
-                      <span className="text-[10px] bg-slate-100 text-slate-600 px-2 py-0.5 rounded-full font-semibold">
-                        {r.badge}
-                      </span>
-                    </button>
-                  ))}
+            {/* User Session / Role Pill */}
+            {isAuthenticated && !isDemoMode ? (
+              <div className="flex items-center gap-2">
+                <div className="hidden lg:flex items-center gap-1.5 px-3 py-1 bg-slate-100 border border-slate-200 rounded-xl text-xs font-semibold text-slate-700">
+                  <Home className="w-3.5 h-3.5 text-nest-600" />
+                  <span className="truncate max-w-[120px]">{household?.name || 'My Household'}</span>
                 </div>
-              )}
-            </div>
+                <div className="flex items-center gap-2 px-3 py-1.5 md:px-3.5 md:py-2 rounded-2xl bg-white border border-slate-200 text-slate-800 text-xs md:text-sm font-semibold shadow-xs">
+                  <div className="w-6 h-6 rounded-full bg-nest-600 text-white flex items-center justify-center font-bold text-xs">
+                    {user.name.charAt(0)}
+                  </div>
+                  <span className="hidden sm:inline font-bold truncate max-w-[130px]">{user.name}</span>
+                  <span className="text-[10px] px-1.5 py-0.5 bg-emerald-100 text-emerald-800 rounded-md uppercase font-bold">
+                    Active
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  onClick={logout}
+                  className="flex items-center gap-1.5 px-3 py-1.5 md:px-3 md:py-2 rounded-2xl bg-slate-100 hover:bg-rose-50 hover:text-rose-700 text-slate-700 text-xs font-bold transition-all border border-slate-200"
+                  title="Sign Out"
+                >
+                  <LogOut className="w-4 h-4 text-slate-500 hover:text-rose-600" />
+                  <span className="hidden md:inline">Sign Out</span>
+                </button>
+              </div>
+            ) : isDemoMode ? (
+              <div className="flex items-center gap-2">
+                <div className="relative">
+                  <button
+                    type="button"
+                    onClick={() => setRoleDropdownOpen(!roleDropdownOpen)}
+                    className="flex items-center gap-2 px-3 py-1.5 md:px-3.5 md:py-2 rounded-2xl bg-white border border-slate-200 hover:border-slate-300 text-slate-800 text-xs md:text-sm font-semibold shadow-xs"
+                  >
+                    <UserCheck className="w-4 h-4 text-nest-600" />
+                    <span className="hidden sm:inline font-bold">{user.name}</span>
+                    <span className="sm:hidden font-bold">{user.role}</span>
+                    <span className="text-[10px] px-1.5 py-0.5 bg-amber-100 text-amber-800 rounded-md uppercase font-bold">
+                      Demo
+                    </span>
+                  </button>
+
+                  {roleDropdownOpen && (
+                    <div
+                      className="absolute right-0 mt-2 w-72 rounded-2xl bg-white border border-slate-200 shadow-xl p-2 z-50 animate-in fade-in zoom-in-95 duration-150"
+                      onClick={() => setRoleDropdownOpen(false)}
+                    >
+                      <div className="px-3 py-2 text-xs font-bold text-slate-400 uppercase tracking-wider">
+                        Switch Active Demo Persona
+                      </div>
+                      {roles.map((r) => (
+                        <button
+                          key={r.role}
+                          type="button"
+                          onClick={() => switchUserRole(r.role)}
+                          className={`w-full text-left p-2.5 rounded-xl text-xs md:text-sm transition-all flex items-center justify-between ${
+                            user.role === r.role
+                              ? 'bg-nest-50 text-nest-950 font-bold border border-nest-200'
+                              : 'hover:bg-slate-50 text-slate-700'
+                          }`}
+                        >
+                          <div>
+                            <div className="font-bold">{r.label}</div>
+                            <div className="text-[11px] text-slate-500">{r.desc}</div>
+                          </div>
+                          <span className="text-[10px] bg-slate-100 text-slate-600 px-2 py-0.5 rounded-full font-semibold">
+                            {r.badge}
+                          </span>
+                        </button>
+                      ))}
+                      <div className="mt-2 pt-2 border-t border-slate-100">
+                        <Link
+                          href="/login"
+                          className="w-full flex items-center justify-center gap-1.5 py-2 px-3 rounded-xl bg-nest-600 text-white font-bold text-xs hover:bg-nest-700 transition-colors"
+                        >
+                          <LogIn className="w-3.5 h-3.5" />
+                          <span>Login with Gmail OTP</span>
+                        </Link>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                <Link
+                  href="/login"
+                  className="hidden xl:flex items-center gap-1.5 px-3 py-1.5 rounded-2xl bg-nest-50 border border-nest-200 hover:bg-nest-100 text-nest-800 text-xs font-bold transition-all"
+                  title="Sign in with your private Gmail account"
+                >
+                  <LogIn className="w-3.5 h-3.5 text-nest-600" />
+                  <span>Sign In</span>
+                </Link>
+              </div>
+            ) : (
+              <Link
+                href="/login"
+                className="flex items-center gap-1.5 px-3 py-1.5 md:px-4 md:py-2 rounded-2xl bg-nest-600 hover:bg-nest-700 text-white text-xs md:text-sm font-bold shadow-xs transition-all"
+              >
+                <LogIn className="w-4 h-4" />
+                <span>Sign In</span>
+              </Link>
+            )}
 
             {/* Emergency Button */}
             <button
@@ -258,6 +320,31 @@ export default function Navbar() {
           >
             Settings & Accessibility
           </Link>
+
+          <div className="pt-3 border-t border-slate-200 mt-2 space-y-2">
+            {isAuthenticated && !isDemoMode ? (
+              <button
+                type="button"
+                onClick={() => {
+                  setMobileMenuOpen(false);
+                  logout();
+                }}
+                className="w-full flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl bg-rose-50 text-rose-700 font-bold text-sm hover:bg-rose-100 transition-colors"
+              >
+                <LogOut className="w-4 h-4" />
+                <span>Sign Out ({user.name})</span>
+              </button>
+            ) : (
+              <Link
+                href="/login"
+                onClick={() => setMobileMenuOpen(false)}
+                className="w-full flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl bg-nest-600 text-white font-bold text-sm hover:bg-nest-700 transition-colors"
+              >
+                <LogIn className="w-4 h-4" />
+                <span>Sign In with Gmail</span>
+              </Link>
+            )}
+          </div>
         </div>
       )}
     </header>

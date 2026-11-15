@@ -1,29 +1,36 @@
 import { NextResponse } from 'next/server';
-import { getCurrentUser, verifyMembership, canManageAppointments } from '@/lib/auth';
+import { authenticateRequest, canManageAppointments } from '@/lib/auth';
 import { 
   getAppointmentsCollection, 
   getNotificationsCollection, 
-  logAudit, 
-  SEED_IDS 
+  getCareProfilesCollection,
+  logAudit 
 } from '@/lib/db';
 import { AppointmentCreateSchema } from '@/lib/validations';
 import { Appointment, NotificationRecord } from '@/types';
 
 export async function GET(request: Request) {
   try {
-    const user = await getCurrentUser(request);
-    const { searchParams } = new URL(request.url);
-    const careProfileId = searchParams.get('careProfileId') || SEED_IDS.PROFILE_MEERA;
-    const status = searchParams.get('status');
-
-    if (user && careProfileId !== SEED_IDS.PROFILE_MEERA) {
-      const { isMember } = await verifyMembership(user._id, careProfileId);
-      if (!isMember) {
-        return NextResponse.json({ error: 'Forbidden: Access denied' }, { status: 403 });
-      }
+    const auth = await authenticateRequest(request);
+    if (!auth.authenticated || !auth.householdId) {
+      return NextResponse.json({ error: auth.error || 'Unauthorized' }, { status: auth.statusCode || 401 });
     }
 
-    const query: Record<string, any> = { careProfileId };
+    const { searchParams } = new URL(request.url);
+    const careProfileId = searchParams.get('careProfileId');
+    const status = searchParams.get('status');
+
+    const query: Record<string, any> = { householdId: auth.householdId };
+    
+    if (careProfileId) {
+      const profilesCol = await getCareProfilesCollection();
+      const profile = await profilesCol.findOne({ _id: careProfileId, householdId: auth.householdId });
+      if (!profile) {
+        return NextResponse.json({ error: 'Forbidden: Access denied' }, { status: 403 });
+      }
+      query.careProfileId = careProfileId;
+    }
+
     if (status) query.status = status;
 
     const apptsCol = await getAppointmentsCollection();
@@ -38,9 +45,9 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   try {
-    const user = await getCurrentUser(request);
-    if (!user) {
-      return NextResponse.json({ error: 'Unauthorized: Authentication required' }, { status: 401 });
+    const auth = await authenticateRequest(request);
+    if (!auth.authenticated || !auth.user || !auth.householdId) {
+      return NextResponse.json({ error: auth.error || 'Unauthorized: Authentication required' }, { status: auth.statusCode || 401 });
     }
 
     const json = await request.json();
@@ -54,16 +61,22 @@ export async function POST(request: Request) {
     }
 
     const data = result.data;
-    const { isMember, role } = await verifyMembership(user._id, data.careProfileId);
 
-    if (data.careProfileId !== SEED_IDS.PROFILE_MEERA && !isMember) {
-      return NextResponse.json({ error: 'Forbidden: You are not a member of this care circle' }, { status: 403 });
+    // Verify care profile belongs to household
+    const profilesCol = await getCareProfilesCollection();
+    let profile = await profilesCol.findOne({ _id: data.careProfileId, householdId: auth.householdId });
+    if (!profile) {
+      profile = await profilesCol.findOne({ householdId: auth.householdId });
+      if (profile) {
+        data.careProfileId = profile._id;
+      } else {
+        return NextResponse.json({ error: 'Forbidden: Invalid care profile for this household' }, { status: 403 });
+      }
     }
 
-    const effectiveRole = role || user.role;
-    if (!canManageAppointments(effectiveRole)) {
+    if (!canManageAppointments(auth.role)) {
       return NextResponse.json(
-        { error: 'Forbidden: Seniors have read-only access to doctor appointments' },
+        { error: 'Forbidden: Your role does not permit scheduling appointments' },
         { status: 403 }
       );
     }
@@ -73,6 +86,7 @@ export async function POST(request: Request) {
 
     const newAppointment: Appointment = {
       _id: apptId,
+      householdId: auth.householdId,
       careProfileId: data.careProfileId,
       doctorName: data.doctorName,
       specialty: data.specialty,
@@ -80,7 +94,7 @@ export async function POST(request: Request) {
       location: data.location,
       notes: data.notes,
       status: data.status || 'scheduled',
-      createdBy: user._id,
+      createdBy: auth.user._id,
       createdAt: now,
       updatedAt: now,
     };
@@ -88,13 +102,14 @@ export async function POST(request: Request) {
     const apptsCol = await getAppointmentsCollection();
     await apptsCol.insertOne(newAppointment);
 
-    // Auto-create notification for the care circle
+    // Circle Notification
     const notifsCol = await getNotificationsCollection();
     const apptNotif: NotificationRecord = {
       _id: `notif_${Date.now()}_appt`,
+      householdId: auth.householdId,
       careProfileId: data.careProfileId,
-      title: `Upcoming Appointment: ${data.doctorName} (${data.specialty})`,
-      message: `Scheduled for ${new Date(data.dateTime).toLocaleString()} at ${data.location}.`,
+      title: `New Appointment Scheduled: ${newAppointment.doctorName}`,
+      message: `${newAppointment.specialty} visit on ${new Date(newAppointment.dateTime).toLocaleDateString()} at ${newAppointment.location}.`,
       type: 'appointment',
       priority: 'medium',
       status: 'unread',
@@ -104,16 +119,16 @@ export async function POST(request: Request) {
     await notifsCol.insertOne(apptNotif);
 
     await logAudit({
+      householdId: auth.householdId,
       careProfileId: data.careProfileId,
-      actorId: user._id,
-      actorName: user.name,
-      actorRole: effectiveRole,
+      actorId: auth.user._id,
+      actorName: auth.user.name,
+      actorRole: auth.role || 'OWNER',
       action: 'SCHEDULE_APPOINTMENT',
       entityType: 'appointment',
       entityId: apptId,
       details: {
         doctorName: data.doctorName,
-        specialty: data.specialty,
         dateTime: data.dateTime,
       },
     });

@@ -1,5 +1,9 @@
 import { 
   User, 
+  Household,
+  Membership,
+  OTPVerification,
+  SessionRecord,
   CareProfile, 
   CareMembership, 
   Medication, 
@@ -16,6 +20,10 @@ import { Db } from 'mongodb';
 
 export const COLLECTIONS = {
   USERS: 'users',
+  HOUSEHOLDS: 'households',
+  MEMBERSHIPS: 'memberships',
+  OTP_VERIFICATIONS: 'otpVerifications',
+  SESSIONS: 'sessions',
   CARE_PROFILES: 'careProfiles',
   CARE_MEMBERSHIPS: 'careMemberships',
   MEDICATIONS: 'medications',
@@ -29,6 +37,22 @@ export const COLLECTIONS = {
 
 export async function getUsersCollection() {
   return getDbCollection<User>(COLLECTIONS.USERS);
+}
+
+export async function getHouseholdsCollection() {
+  return getDbCollection<Household>(COLLECTIONS.HOUSEHOLDS);
+}
+
+export async function getMembershipsCollection() {
+  return getDbCollection<Membership>(COLLECTIONS.MEMBERSHIPS);
+}
+
+export async function getOtpVerificationsCollection() {
+  return getDbCollection<OTPVerification>(COLLECTIONS.OTP_VERIFICATIONS);
+}
+
+export async function getSessionsCollection() {
+  return getDbCollection<SessionRecord>(COLLECTIONS.SESSIONS);
 }
 
 export async function getCareProfilesCollection() {
@@ -68,6 +92,7 @@ export async function getAuditLogsCollection() {
 }
 
 export async function logAudit(entry: {
+  householdId?: string;
   careProfileId: string;
   actorId: string;
   actorName: string;
@@ -104,31 +129,63 @@ export async function ensureIndexes() {
 
     const mongoDb = db as Db;
 
-    // Unique index on doseKey to prevent any concurrent double administration race conditions at DB level
+    // Users
+    await mongoDb.collection(COLLECTIONS.USERS).createIndex(
+      { email: 1 },
+      { unique: true }
+    );
+
+    // Households & Memberships
+    await mongoDb.collection(COLLECTIONS.HOUSEHOLDS).createIndex(
+      { ownerId: 1 }
+    );
+    await mongoDb.collection(COLLECTIONS.MEMBERSHIPS).createIndex(
+      { userId: 1, householdId: 1 },
+      { unique: true }
+    );
+    await mongoDb.collection(COLLECTIONS.MEMBERSHIPS).createIndex(
+      { householdId: 1 }
+    );
+
+    // Sessions & OTPs
+    await mongoDb.collection(COLLECTIONS.SESSIONS).createIndex(
+      { sessionTokenHash: 1 },
+      { unique: true }
+    );
+    await mongoDb.collection(COLLECTIONS.SESSIONS).createIndex(
+      { userId: 1 }
+    );
+    await mongoDb.collection(COLLECTIONS.OTP_VERIFICATIONS).createIndex(
+      { email: 1, createdAt: -1 }
+    );
+
+    // Dose Events (Unique doseKey prevents accidental double dosing)
     await mongoDb.collection(COLLECTIONS.DOSE_EVENTS).createIndex(
       { doseKey: 1 },
       { unique: true }
     );
+    await mongoDb.collection(COLLECTIONS.DOSE_EVENTS).createIndex(
+      { householdId: 1, scheduledAt: 1 }
+    );
 
-    // Indexed queries
-    await mongoDb.collection(COLLECTIONS.CARE_MEMBERSHIPS).createIndex(
-      { userId: 1, careProfileId: 1 }
+    // Household scoped indexes
+    await mongoDb.collection(COLLECTIONS.CARE_PROFILES).createIndex(
+      { householdId: 1 }
+    );
+    await mongoDb.collection(COLLECTIONS.MEDICATIONS).createIndex(
+      { householdId: 1, status: 1 }
     );
     await mongoDb.collection(COLLECTIONS.MEDICATIONS).createIndex(
       { careProfileId: 1, status: 1 }
     );
     await mongoDb.collection(COLLECTIONS.HEALTH_LOGS).createIndex(
-      { careProfileId: 1, reportedAt: -1 }
+      { householdId: 1, reportedAt: -1 }
     );
     await mongoDb.collection(COLLECTIONS.CAREGIVER_NOTES).createIndex(
-      { careProfileId: 1, createdAt: -1 }
+      { householdId: 1, createdAt: -1 }
     );
     await mongoDb.collection(COLLECTIONS.APPOINTMENTS).createIndex(
-      { careProfileId: 1, dateTime: 1 }
-    );
-    await mongoDb.collection(COLLECTIONS.USERS).createIndex(
-      { email: 1 },
-      { unique: true }
+      { householdId: 1, dateTime: 1 }
     );
 
     indexesInitialized = true;

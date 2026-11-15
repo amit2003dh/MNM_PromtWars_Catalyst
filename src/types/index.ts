@@ -1,6 +1,8 @@
-export type UserRole = 'senior' | 'caregiver' | 'family';
+export type UserRole = 'senior' | 'caregiver' | 'family' | 'owner';
 
-export type CareMemberRole = 'primary_caregiver' | 'caregiver' | 'family' | 'senior';
+export type HouseholdRole = 'OWNER' | 'FAMILY_COORDINATOR' | 'CAREGIVER' | 'SENIOR' | 'primary_caregiver' | 'caregiver' | 'family' | 'senior';
+
+export type CareMemberRole = 'primary_caregiver' | 'caregiver' | 'family' | 'senior' | 'OWNER' | 'FAMILY_COORDINATOR' | 'CAREGIVER' | 'SENIOR';
 
 export type MedicineCategory = 'allopathic' | 'ayurvedic' | 'herbal' | 'otc';
 
@@ -24,8 +26,64 @@ export interface EmergencyContact {
   isPrimary?: boolean;
 }
 
+export interface User {
+  _id: string;
+  email: string;
+  name: string;
+  role?: string;
+  avatar?: string;
+  emailVerified?: boolean;
+  phone?: string;
+  passwordHash?: string;
+  activeHouseholdId?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface Household {
+  _id: string;
+  name: string;
+  ownerId: string;
+  createdAt: string;
+  updatedAt?: string;
+}
+
+export interface Membership {
+  _id: string;
+  userId: string;
+  householdId: string;
+  role: HouseholdRole;
+  status: 'active' | 'invited' | 'revoked';
+  joinedAt: string;
+  createdAt: string;
+  userName?: string;
+  userEmail?: string;
+}
+
+export interface OTPVerification {
+  _id: string;
+  email: string;
+  otpHash: string;
+  expiresAt: string | Date;
+  attempts: number;
+  lastSentAt: string | Date;
+  verifiedAt?: string | Date;
+  createdAt: string | Date;
+}
+
+export interface SessionRecord {
+  _id: string;
+  userId: string;
+  householdId: string;
+  sessionTokenHash: string;
+  expiresAt: string | Date;
+  createdAt: string | Date;
+}
+
 export interface CareProfile {
   _id: string;
+  householdId?: string;
+  seniorUserId?: string;
   fullName: string;
   preferredName?: string;
   age: number;
@@ -44,6 +102,7 @@ export interface CareProfile {
 
 export interface CareMembership {
   _id: string;
+  householdId?: string;
   careProfileId: string;
   userId: string;
   role: CareMemberRole;
@@ -57,6 +116,7 @@ export interface CareMembership {
 
 export interface Medication {
   _id: string;
+  householdId?: string;
   careProfileId: string;
   medicineName: string;
   medicineCategory: MedicineCategory;
@@ -83,6 +143,7 @@ export interface Medication {
 
 export interface DoseEvent {
   _id: string;
+  householdId?: string;
   careProfileId: string;
   medicationId: string;
   doseKey: string; // <careProfileId>_<medicationId>_YYYY-MM-DD_HH:mm
@@ -96,6 +157,7 @@ export interface DoseEvent {
 
 export interface Appointment {
   _id: string;
+  householdId?: string;
   careProfileId: string;
   doctorName: string;
   specialty: string;
@@ -110,6 +172,7 @@ export interface Appointment {
 
 export interface HealthLog {
   _id: string;
+  householdId?: string;
   careProfileId: string;
   symptom: SymptomType;
   severity: 'mild' | 'moderate' | 'severe';
@@ -121,6 +184,7 @@ export interface HealthLog {
 
 export interface CaregiverNote {
   _id: string;
+  householdId?: string;
   careProfileId: string;
   authorId: string;
   authorName: string;
@@ -132,6 +196,7 @@ export interface CaregiverNote {
 
 export interface NotificationRecord {
   _id: string;
+  householdId?: string;
   careProfileId: string;
   recipientId?: string;
   title: string;
@@ -146,6 +211,7 @@ export interface NotificationRecord {
 
 export interface AuditLog {
   _id: string;
+  householdId?: string;
   careProfileId: string;
   actorId: string;
   actorName: string;
@@ -160,6 +226,7 @@ export interface AuditLog {
 // Today's unified schedule item for the UI
 export interface ScheduleItem {
   doseKey: string;
+  householdId?: string;
   medicationId: string;
   medicineName: string;
   medicineCategory: MedicineCategory;
@@ -178,20 +245,11 @@ export interface ScheduleItem {
   remainingQuantity: number;
 }
 
-export interface User {
-  _id: string;
-  email: string;
-  name: string;
-  role: UserRole;
-  phone?: string;
-  passwordHash?: string;
-  createdAt: string;
-  updatedAt: string;
-}
-
 export interface AuthSession {
   user: User;
-  memberships: CareMembership[];
+  household?: Household;
+  householdId?: string;
+  role?: string;
+  memberships: (Membership | CareMembership)[];
   activeProfile?: CareProfile;
 }
-

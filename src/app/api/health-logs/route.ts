@@ -1,30 +1,37 @@
 import { NextResponse } from 'next/server';
-import { getCurrentUser, verifyMembership, canReportSymptoms } from '@/lib/auth';
+import { authenticateRequest, canReportSymptoms } from '@/lib/auth';
 import { 
   getHealthLogsCollection, 
   getNotificationsCollection, 
-  logAudit, 
-  SEED_IDS 
+  getCareProfilesCollection,
+  logAudit 
 } from '@/lib/db';
 import { HealthLogCreateSchema } from '@/lib/validations';
 import { HealthLog, NotificationRecord } from '@/types';
 
 export async function GET(request: Request) {
   try {
-    const user = await getCurrentUser(request);
+    const auth = await authenticateRequest(request);
+    if (!auth.authenticated || !auth.householdId) {
+      return NextResponse.json({ error: auth.error || 'Unauthorized' }, { status: auth.statusCode || 401 });
+    }
+
     const { searchParams } = new URL(request.url);
-    const careProfileId = searchParams.get('careProfileId') || SEED_IDS.PROFILE_MEERA;
+    const careProfileId = searchParams.get('careProfileId');
     const symptom = searchParams.get('symptom');
     const limit = parseInt(searchParams.get('limit') || '50', 10);
 
-    if (user && careProfileId !== SEED_IDS.PROFILE_MEERA) {
-      const { isMember } = await verifyMembership(user._id, careProfileId);
-      if (!isMember) {
+    const query: Record<string, any> = { householdId: auth.householdId };
+    
+    if (careProfileId) {
+      const profilesCol = await getCareProfilesCollection();
+      const profile = await profilesCol.findOne({ _id: careProfileId, householdId: auth.householdId });
+      if (!profile) {
         return NextResponse.json({ error: 'Forbidden: Access denied' }, { status: 403 });
       }
+      query.careProfileId = careProfileId;
     }
 
-    const query: Record<string, any> = { careProfileId };
     if (symptom) query.symptom = symptom;
 
     const healthLogsCol = await getHealthLogsCollection();
@@ -39,9 +46,9 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   try {
-    const user = await getCurrentUser(request);
-    if (!user) {
-      return NextResponse.json({ error: 'Unauthorized: Authentication required' }, { status: 401 });
+    const auth = await authenticateRequest(request);
+    if (!auth.authenticated || !auth.user || !auth.householdId) {
+      return NextResponse.json({ error: auth.error || 'Unauthorized: Authentication required' }, { status: auth.statusCode || 401 });
     }
 
     const json = await request.json();
@@ -55,69 +62,74 @@ export async function POST(request: Request) {
     }
 
     const data = result.data;
-    const { isMember, role } = await verifyMembership(user._id, data.careProfileId);
 
-    if (data.careProfileId !== SEED_IDS.PROFILE_MEERA && !isMember) {
-      return NextResponse.json({ error: 'Forbidden: You are not a member of this care circle' }, { status: 403 });
+    // Verify profile belongs to this household
+    const profilesCol = await getCareProfilesCollection();
+    let profile = await profilesCol.findOne({ _id: data.careProfileId, householdId: auth.householdId });
+    if (!profile) {
+      profile = await profilesCol.findOne({ householdId: auth.householdId });
+      if (profile) {
+        data.careProfileId = profile._id;
+      } else {
+        return NextResponse.json({ error: 'Forbidden: Invalid care profile for this household' }, { status: 403 });
+      }
     }
 
-    const effectiveRole = role || user.role;
-    if (!canReportSymptoms(effectiveRole)) {
+    if (!canReportSymptoms(auth.role)) {
       return NextResponse.json(
-        { error: 'Forbidden: Only seniors and caregivers may log symptoms' },
+        { error: 'Forbidden: Your role does not have permission to log health symptoms' },
         { status: 403 }
       );
     }
 
     const now = new Date().toISOString();
-    const logId = `health_log_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+    const logId = `hl_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
 
     const newLog: HealthLog = {
       _id: logId,
+      householdId: auth.householdId,
       careProfileId: data.careProfileId,
       symptom: data.symptom,
       severity: data.severity,
       notes: data.notes,
-      reportedBy: user._id,
-      reportedByName: `${user.name} (${effectiveRole})`,
+      reportedBy: auth.user._id,
+      reportedByName: auth.user.name,
       reportedAt: now,
     };
 
     const healthLogsCol = await getHealthLogsCollection();
     await healthLogsCol.insertOne(newLog);
 
-    // Auto-create escalation alert notification for moderate/severe symptoms or red-flag symptoms
-    const isEscalationCandidate = data.severity === 'severe' || 
-      (data.severity === 'moderate' && ['dizziness', 'confusion', 'weakness'].includes(data.symptom));
-
-    if (isEscalationCandidate) {
+    // Auto-create high-priority circle notification for concerning symptoms
+    if (['dizziness', 'weakness', 'confusion', 'stomach_discomfort'].includes(data.symptom)) {
       const notifsCol = await getNotificationsCollection();
-      const symptomAlert: NotificationRecord = {
+      const alertNotif: NotificationRecord = {
         _id: `notif_${Date.now()}_symptom`,
+        householdId: auth.householdId,
         careProfileId: data.careProfileId,
-        title: `Symptom Alert: ${data.severity.toUpperCase()} ${data.symptom.replace('_', ' ')}`,
-        message: `${user.name} logged ${data.severity} ${data.symptom}. Notes: ${data.notes || 'None'}. Please monitor closely.`,
+        title: `Health Alert: ${data.symptom.replace('_', ' ').toUpperCase()} reported by ${auth.user.name}`,
+        message: `Severity: ${data.severity.toUpperCase()}. Notes: ${data.notes || 'None specified'}. Care circle notified.`,
         type: 'symptom_alert',
         priority: data.severity === 'severe' ? 'urgent' : 'high',
         status: 'unread',
         sentViaEmail: false,
         createdAt: now,
       };
-      await notifsCol.insertOne(symptomAlert);
+      await notifsCol.insertOne(alertNotif);
     }
 
     await logAudit({
+      householdId: auth.householdId,
       careProfileId: data.careProfileId,
-      actorId: user._id,
-      actorName: user.name,
-      actorRole: effectiveRole,
-      action: 'LOG_HEALTH_SYMPTOM',
+      actorId: auth.user._id,
+      actorName: auth.user.name,
+      actorRole: auth.role || 'OWNER',
+      action: 'LOG_SYMPTOM',
       entityType: 'healthLog',
       entityId: logId,
       details: {
         symptom: data.symptom,
         severity: data.severity,
-        notes: data.notes,
       },
     });
 

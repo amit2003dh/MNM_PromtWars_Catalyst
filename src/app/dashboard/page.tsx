@@ -27,6 +27,8 @@ import {
   ArrowRight,
   HelpCircle,
   Stethoscope,
+  Pill,
+  Plus,
 } from 'lucide-react';
 import { formatTime, formatDateTime } from '@/lib/utils';
 
@@ -236,9 +238,19 @@ export default function DashboardPage() {
               <span>Full Medication Schedule for Today</span>
             </h2>
             <div className="space-y-3">
-              {todayDoses.map((dose) => (
-                <DoseItem key={dose.doseKey} item={dose} highlightSenior={true} />
-              ))}
+              {todayDoses.length === 0 ? (
+                <div className="p-8 text-center rounded-3xl bg-white border border-dashed border-slate-200 space-y-2">
+                  <Pill className="w-10 h-10 text-slate-300 mx-auto" />
+                  <h3 className="text-xl font-bold text-navy-950">No medicines scheduled for today</h3>
+                  <p className="text-slate-500 text-sm max-w-sm mx-auto">
+                    Your caregiver or family member will schedule your daily medication doses here.
+                  </p>
+                </div>
+              ) : (
+                todayDoses.map((dose) => (
+                  <DoseItem key={dose.doseKey} item={dose} highlightSenior={true} />
+                ))
+              )}
             </div>
           </div>
 
@@ -357,6 +369,37 @@ export default function DashboardPage() {
           </div>
         </div>
 
+        {/* Onboarding Welcome Card for Brand-New Households with 0 Medications */}
+        {medications.length === 0 && (
+          <div className="rounded-3xl bg-gradient-to-br from-nest-50 via-white to-sky-50 border-2 border-dashed border-nest-200 p-6 sm:p-8 text-center space-y-4">
+            <div className="w-16 h-16 rounded-3xl bg-nest-600 text-white flex items-center justify-center mx-auto shadow-md shadow-nest-600/20">
+              <Pill className="w-8 h-8" />
+            </div>
+            <div className="max-w-md mx-auto space-y-2">
+              <h3 className="text-xl sm:text-2xl font-black text-navy-950">Welcome to CareNest AI!</h3>
+              <p className="text-xs sm:text-sm text-slate-600 leading-relaxed">
+                Your private care household is set up. Add your first medication to generate daily schedules, enable automated safety alerts, and receive AI-powered drug interaction insights.
+              </p>
+            </div>
+            <div className="flex flex-wrap items-center justify-center gap-3 pt-2">
+              <Link
+                href="/medications"
+                className="px-5 py-3 rounded-2xl bg-nest-600 hover:bg-nest-700 text-white font-bold text-xs sm:text-sm shadow-md shadow-nest-600/20 inline-flex items-center gap-2 transition-transform active:scale-95"
+              >
+                <Plus className="w-4 h-4" />
+                <span>Add First Medication</span>
+              </Link>
+              <Link
+                href="/care-circle"
+                className="px-5 py-3 rounded-2xl bg-white border border-slate-200 hover:border-slate-300 text-slate-800 font-bold text-xs sm:text-sm shadow-xs inline-flex items-center gap-2 transition-colors"
+              >
+                <Users className="w-4 h-4 text-nest-600" />
+                <span>Invite Care Circle Member</span>
+              </Link>
+            </div>
+          </div>
+        )}
+
         {/* 1. StatCards */}
         <StatCards />
 
@@ -418,15 +461,32 @@ export default function DashboardPage() {
 
               {/* Doses List */}
               <div className="space-y-3 pt-2">
-                {todayDoses
-                  .filter((d) => {
-                    if (activeTab === 'pending') return d.status === 'scheduled';
-                    if (activeTab === 'completed') return d.status === 'taken';
-                    return true;
-                  })
-                  .map((dose) => (
-                    <DoseItem key={dose.doseKey} item={dose} />
-                  ))}
+                {todayDoses.length === 0 ? (
+                  <div className="text-center py-10 px-4 rounded-2xl bg-slate-50/70 border border-dashed border-slate-200">
+                    <Pill className="w-8 h-8 text-slate-300 mx-auto mb-2" />
+                    <h4 className="font-bold text-navy-950 text-sm">No doses scheduled for today</h4>
+                    <p className="text-xs text-slate-500 max-w-sm mx-auto mt-1 mb-3">
+                      Once medications are added to your cabinet, today&apos;s dosage slots will appear here automatically.
+                    </p>
+                    <Link
+                      href="/medications"
+                      className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-nest-600 hover:bg-nest-700 text-white rounded-xl text-xs font-bold shadow-xs"
+                    >
+                      <Plus className="w-3.5 h-3.5" />
+                      <span>Add Medication</span>
+                    </Link>
+                  </div>
+                ) : (
+                  todayDoses
+                    .filter((d) => {
+                      if (activeTab === 'pending') return d.status === 'scheduled';
+                      if (activeTab === 'completed') return d.status === 'taken';
+                      return true;
+                    })
+                    .map((dose) => (
+                      <DoseItem key={dose.doseKey} item={dose} />
+                    ))
+                )}
               </div>
             </div>
 
@@ -459,25 +519,31 @@ export default function DashboardPage() {
                 </div>
               </div>
 
-              <div className="relative pl-4 space-y-4 before:absolute before:left-2 before:top-2 before:bottom-2 before:w-0.5 before:bg-slate-200">
-                {careTimelineEvents.slice(0, 5).map((ev) => (
-                  <div key={ev.id} className="relative group">
-                    <div className="absolute -left-[1.35rem] top-1.5 w-3 h-3 rounded-full bg-nest-500 border-2 border-white ring-2 ring-slate-200" />
-                    <div className="space-y-1">
-                      <div className="flex items-center justify-between text-[11px] text-slate-500">
-                        <span className="font-bold text-navy-900">{ev.actor}</span>
-                        <span>{formatDateTime(ev.time)}</span>
+              {careTimelineEvents.length === 0 ? (
+                <div className="py-8 text-center text-slate-400 text-xs font-medium bg-slate-50/50 rounded-2xl border border-dashed border-slate-200 p-4">
+                  No recent care events recorded. Administered doses, symptom check-ins, and shift notes will appear here in real-time.
+                </div>
+              ) : (
+                <div className="relative pl-4 space-y-4 before:absolute before:left-2 before:top-2 before:bottom-2 before:w-0.5 before:bg-slate-200">
+                  {careTimelineEvents.slice(0, 5).map((ev) => (
+                    <div key={ev.id} className="relative group">
+                      <div className="absolute -left-[1.35rem] top-1.5 w-3 h-3 rounded-full bg-nest-500 border-2 border-white ring-2 ring-slate-200" />
+                      <div className="space-y-1">
+                        <div className="flex items-center justify-between text-[11px] text-slate-500">
+                          <span className="font-bold text-navy-900">{ev.actor}</span>
+                          <span>{formatDateTime(ev.time)}</span>
+                        </div>
+                        <p className="text-xs font-semibold text-slate-700 leading-snug">
+                          {ev.title}
+                        </p>
+                        <span className={`inline-block text-[10px] font-bold px-2 py-0.5 rounded-md ${ev.badgeColor}`}>
+                          {ev.badge}
+                        </span>
                       </div>
-                      <p className="text-xs font-semibold text-slate-700 leading-snug">
-                        {ev.title}
-                      </p>
-                      <span className={`inline-block text-[10px] font-bold px-2 py-0.5 rounded-md ${ev.badgeColor}`}>
-                        {ev.badge}
-                      </span>
                     </div>
-                  </div>
-                ))}
-              </div>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
         </div>
