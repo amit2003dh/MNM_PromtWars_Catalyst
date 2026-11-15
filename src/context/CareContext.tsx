@@ -147,49 +147,32 @@ export function CareProvider({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
 
-  const [user, setUser] = useState<UserSession>(() => {
-    if (typeof window !== 'undefined') {
-      try {
-        const saved = localStorage.getItem('carenest_user');
-        if (saved) return JSON.parse(saved);
-      } catch {}
-    }
-    return DEMO_USERS.caregiver;
-  });
-  const [household, setHousehold] = useState<Household | null>(() => {
-    if (typeof window !== 'undefined') {
-      try {
-        const saved = localStorage.getItem('carenest_household');
-        if (saved) return JSON.parse(saved);
-      } catch {}
-    }
-    return null;
-  });
-  const [householdId, setHouseholdId] = useState<string | null>(() => {
-    if (typeof window !== 'undefined') {
-      try {
-        return localStorage.getItem('carenest_household_id') || null;
-      } catch {}
-    }
-    return null;
-  });
-  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(() => {
-    if (typeof window !== 'undefined') {
-      try {
-        return localStorage.getItem('carenest_is_authenticated') === 'true';
-      } catch {}
-    }
-    return false;
-  });
+  const [user, setUser] = useState<UserSession>(DEMO_USERS.caregiver);
+  const [household, setHousehold] = useState<Household | null>(null);
+  const [householdId, setHouseholdId] = useState<string | null>(null);
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
   const [isLoading, setIsLoading] = useState<boolean>(true);
-  const [isDemoMode, setIsDemoMode] = useState<boolean>(() => {
-    if (typeof window !== 'undefined') {
-      try {
-        return localStorage.getItem('carenest_is_demo') === 'true';
-      } catch {}
-    }
-    return false;
-  });
+  const [isDemoMode, setIsDemoMode] = useState<boolean>(false);
+
+  // Safely hydrate from localStorage on client after mount (prevents SSR hydration mismatch)
+  useEffect(() => {
+    try {
+      const savedUser = localStorage.getItem('carenest_user');
+      if (savedUser) setUser(JSON.parse(savedUser));
+
+      const savedHousehold = localStorage.getItem('carenest_household');
+      if (savedHousehold) setHousehold(JSON.parse(savedHousehold));
+
+      const savedHhId = localStorage.getItem('carenest_household_id');
+      if (savedHhId) setHouseholdId(savedHhId);
+
+      const savedAuth = localStorage.getItem('carenest_is_authenticated');
+      if (savedAuth === 'true') setIsAuthenticated(true);
+
+      const savedDemo = localStorage.getItem('carenest_is_demo');
+      if (savedDemo === 'true') setIsDemoMode(true);
+    } catch {}
+  }, []);
 
   const [seniorMode, setSeniorModeState] = useState<boolean>(false);
   const [careProfile, setCareProfile] = useState<CareProfile>(DEFAULT_DEMO_PROFILE);

@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import {
@@ -47,8 +47,13 @@ export default function Navbar() {
     logout,
   } = useCare();
 
+  const [mounted, setMounted] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [roleDropdownOpen, setRoleDropdownOpen] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   const pendingDosesCount = todayDoses.filter((d) => d.status === 'scheduled').length;
   const lowStockCount = medications.filter((m) => m.remainingQuantity <= m.refillThreshold).length;
@@ -162,7 +167,15 @@ export default function Navbar() {
             </button>
 
             {/* User Session / Role Pill */}
-            {isAuthenticated && !isDemoMode ? (
+            {!mounted ? (
+              <Link
+                href="/login"
+                className="flex items-center gap-1.5 px-3 py-1.5 md:px-4 md:py-2 rounded-2xl bg-nest-600 hover:bg-nest-700 text-white text-xs md:text-sm font-bold shadow-xs transition-all"
+              >
+                <LogIn className="w-4 h-4" />
+                <span>Sign In</span>
+              </Link>
+            ) : isAuthenticated && !isDemoMode ? (
               <div className="flex items-center gap-2">
                 <div className="hidden lg:flex items-center gap-1.5 px-3 py-1 bg-slate-100 border border-slate-200 rounded-xl text-xs font-semibold text-slate-700">
                   <Home className="w-3.5 h-3.5 text-nest-600" />
