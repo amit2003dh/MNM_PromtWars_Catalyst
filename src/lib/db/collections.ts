@@ -1,18 +1,18 @@
-import { 
-  User, 
+import {
+  User,
   Household,
   Membership,
   OTPVerification,
   SessionRecord,
-  CareProfile, 
-  CareMembership, 
-  Medication, 
-  DoseEvent, 
-  Appointment, 
-  HealthLog, 
-  CaregiverNote, 
-  NotificationRecord, 
-  AuditLog 
+  CareProfile,
+  CareMembership,
+  Medication,
+  DoseEvent,
+  Appointment,
+  HealthLog,
+  CaregiverNote,
+  NotificationRecord,
+  AuditLog
 } from '@/types';
 import { getDbCollection, getDatabase } from './client';
 import { MockDatabase } from './mock-store';
