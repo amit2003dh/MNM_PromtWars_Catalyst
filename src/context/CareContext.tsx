@@ -263,7 +263,7 @@ export function CareProvider({ children }: { children: React.ReactNode }) {
           }
         }
       } else {
-        // Not authenticated
+        // Not authenticated - clear state and return early without calling protected endpoints
         setIsAuthenticated(false);
         setIsDemoMode(false);
         if (typeof window !== 'undefined') {
@@ -275,6 +275,14 @@ export function CareProvider({ children }: { children: React.ReactNode }) {
             localStorage.removeItem('carenest_is_demo');
           } catch {}
         }
+        setTodayDoses([]);
+        setMedications([]);
+        setHealthLogs([]);
+        setCaregiverNotes([]);
+        setAppointments([]);
+        setNotifications([]);
+        setIsLoading(false);
+        return;
       }
     } catch (err) {
       console.warn('[CareContext] Auth check failed:', err);
