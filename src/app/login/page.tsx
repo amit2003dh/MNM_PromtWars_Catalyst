@@ -14,6 +14,18 @@ export default function LoginPage() {
   const [error, setError] = useState<string | null>(null);
   const [sentSuccess, setSentSuccess] = useState(false);
 
+  // Lock browser history on /login so pressing Back cannot return to previous authenticated pages
+  React.useEffect(() => {
+    if (typeof window !== 'undefined') {
+      window.history.pushState(null, '', window.location.href);
+      const handlePopState = () => {
+        window.history.pushState(null, '', window.location.href);
+      };
+      window.addEventListener('popstate', handlePopState);
+      return () => window.removeEventListener('popstate', handlePopState);
+    }
+  }, []);
+
   const handleSendOtp = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);

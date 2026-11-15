@@ -44,7 +44,7 @@ export default function RegisterPage() {
           </div>
           <h1 className="text-2xl font-black text-navy-950">Create an Account</h1>
           <p className="text-xs text-slate-500 font-medium">
-            Join or coordinate a loved one's Care Circle
+            Join or coordinate a loved one&apos;s Care Circle
           </p>
         </div>
 

@@ -32,21 +32,21 @@ const DEMO_USERS: Record<string, UserSession> = {
     id: 'user_meera_01',
     name: 'Meera Sharma',
     role: 'senior',
-    email: 'meera.sharma@example.com',
+    email: 'meera@carenest.local',
     householdId: 'household_demo_meera_01',
   },
   caregiver: {
     id: 'user_sunita_02',
     name: 'Sunita Verma',
     role: 'caregiver',
-    email: 'sunita.care@example.com',
+    email: 'sunita@carenest.local',
     householdId: 'household_demo_meera_01',
   },
   family: {
     id: 'user_rahul_03',
     name: 'Rahul Sharma',
     role: 'family',
-    email: 'rahul.sharma@example.com',
+    email: 'rahul@carenest.local',
     householdId: 'household_demo_meera_01',
   },
 };
@@ -147,12 +147,49 @@ export function CareProvider({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
 
-  const [user, setUser] = useState<UserSession>(DEMO_USERS.caregiver);
-  const [household, setHousehold] = useState<Household | null>(null);
-  const [householdId, setHouseholdId] = useState<string | null>(null);
-  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
+  const [user, setUser] = useState<UserSession>(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const saved = localStorage.getItem('carenest_user');
+        if (saved) return JSON.parse(saved);
+      } catch {}
+    }
+    return DEMO_USERS.caregiver;
+  });
+  const [household, setHousehold] = useState<Household | null>(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const saved = localStorage.getItem('carenest_household');
+        if (saved) return JSON.parse(saved);
+      } catch {}
+    }
+    return null;
+  });
+  const [householdId, setHouseholdId] = useState<string | null>(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        return localStorage.getItem('carenest_household_id') || null;
+      } catch {}
+    }
+    return null;
+  });
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        return localStorage.getItem('carenest_is_authenticated') === 'true';
+      } catch {}
+    }
+    return false;
+  });
   const [isLoading, setIsLoading] = useState<boolean>(true);
-  const [isDemoMode, setIsDemoMode] = useState<boolean>(false);
+  const [isDemoMode, setIsDemoMode] = useState<boolean>(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        return localStorage.getItem('carenest_is_demo') === 'true';
+      } catch {}
+    }
+    return false;
+  });
 
   const [seniorMode, setSeniorModeState] = useState<boolean>(false);
   const [careProfile, setCareProfile] = useState<CareProfile>(DEFAULT_DEMO_PROFILE);
@@ -192,7 +229,8 @@ export function CareProvider({ children }: { children: React.ReactNode }) {
         const authData = await meRes.json();
         if (authData.authenticated && authData.user) {
           setIsAuthenticated(true);
-          setIsDemoMode(authData.householdId === 'household_demo_meera_01');
+          const isDemo = authData.householdId === 'household_demo_meera_01';
+          setIsDemoMode(isDemo);
           setHousehold(authData.household || null);
           setHouseholdId(authData.householdId || null);
           
@@ -205,6 +243,21 @@ export function CareProvider({ children }: { children: React.ReactNode }) {
             householdId: authData.householdId,
           };
           setUser(sessionUser);
+
+          // Save to localStorage for instant hydration on page refresh
+          if (typeof window !== 'undefined') {
+            try {
+              localStorage.setItem('carenest_user', JSON.stringify(sessionUser));
+              if (authData.household) {
+                localStorage.setItem('carenest_household', JSON.stringify(authData.household));
+              }
+              if (authData.householdId) {
+                localStorage.setItem('carenest_household_id', authData.householdId);
+              }
+              localStorage.setItem('carenest_is_authenticated', 'true');
+              localStorage.setItem('carenest_is_demo', String(isDemo));
+            } catch {}
+          }
 
           if (authData.activeProfile) {
             setCareProfile(authData.activeProfile);
@@ -229,6 +282,16 @@ export function CareProvider({ children }: { children: React.ReactNode }) {
       } else {
         // Not authenticated
         setIsAuthenticated(false);
+        setIsDemoMode(false);
+        if (typeof window !== 'undefined') {
+          try {
+            localStorage.removeItem('carenest_user');
+            localStorage.removeItem('carenest_household');
+            localStorage.removeItem('carenest_household_id');
+            localStorage.setItem('carenest_is_authenticated', 'false');
+            localStorage.removeItem('carenest_is_demo');
+          } catch {}
+        }
       }
     } catch (err) {
       console.warn('[CareContext] Auth check failed:', err);
@@ -361,14 +424,25 @@ export function CareProvider({ children }: { children: React.ReactNode }) {
       setSeniorModeState(false);
     }
 
-    // Set demo cookie / header session
+    if (typeof window !== 'undefined') {
+      try {
+        localStorage.setItem('carenest_user', JSON.stringify(demoUser));
+        localStorage.setItem('carenest_household_id', 'household_demo_meera_01');
+        localStorage.setItem('carenest_is_authenticated', 'true');
+        localStorage.setItem('carenest_is_demo', 'true');
+      } catch {}
+    }
+
+    // Set demo cookie / session in DB
     try {
       await fetch('/api/auth/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email: demoUser.email, password: 'password123' }),
       });
-    } catch {}
+    } catch (err) {
+      console.warn('[CareContext] switchUserRole login error:', err);
+    }
 
     await refreshData();
   }, [refreshData]);
@@ -381,6 +455,20 @@ export function CareProvider({ children }: { children: React.ReactNode }) {
     } catch (err) {
       console.warn('[CareContext] Logout error:', err);
     }
+
+    // 1. Wipe client storage immediately
+    if (typeof window !== 'undefined') {
+      try {
+        localStorage.removeItem('carenest_user');
+        localStorage.removeItem('carenest_household');
+        localStorage.removeItem('carenest_household_id');
+        localStorage.setItem('carenest_is_authenticated', 'false');
+        localStorage.removeItem('carenest_is_demo');
+        sessionStorage.clear();
+      } catch {}
+    }
+
+    // 2. Clear state
     setIsAuthenticated(false);
     setIsDemoMode(false);
     setUser(DEMO_USERS.caregiver);
@@ -392,7 +480,13 @@ export function CareProvider({ children }: { children: React.ReactNode }) {
     setCaregiverNotes([]);
     setAppointments([]);
     setIsLoading(false);
-    router.push('/login');
+
+    // 3. Replace history so pressing browser Back does not return to previous authenticated page
+    if (typeof window !== 'undefined') {
+      window.location.replace('/login');
+    } else {
+      router.replace('/login');
+    }
   }, [router]);
 
   // Administer dose with Anti-Double-Dosing concurrency lock

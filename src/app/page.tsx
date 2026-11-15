@@ -23,8 +23,8 @@ export default function LandingPage() {
   const router = useRouter();
   const { switchUserRole } = useCare();
 
-  const handleLaunchRole = (role: UserRole) => {
-    switchUserRole(role);
+  const handleLaunchRole = async (role: UserRole) => {
+    await switchUserRole(role);
     router.push('/dashboard');
   };
 

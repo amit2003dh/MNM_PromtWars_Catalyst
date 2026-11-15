@@ -100,7 +100,7 @@ export default function AdherenceChart() {
       {/* Metric Breakdown Row */}
       <div className="grid grid-cols-3 gap-2 text-center pt-1">
         <div className="p-3 rounded-2xl bg-slate-50 border border-slate-100">
-          <div className="text-xs text-slate-500 font-semibold">Today's Completed</div>
+          <div className="text-xs text-slate-500 font-semibold">Today&apos;s Completed</div>
           <div className="text-lg font-black text-navy-950 mt-0.5">
             {takenToday} / {totalToday}
           </div>

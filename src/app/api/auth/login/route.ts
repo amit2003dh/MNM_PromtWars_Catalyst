@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { LoginSchema } from '@/lib/validations';
-import { getUsersCollection, getCareMembershipsCollection } from '@/lib/db';
-import { comparePassword, createSessionToken, SESSION_COOKIE_NAME, SESSION_MAX_AGE_SECONDS } from '@/lib/auth';
+import { getUsersCollection, getCareMembershipsCollection, getMembershipsCollection, SEED_IDS } from '@/lib/db';
+import { comparePassword, createDBSession, SESSION_COOKIE_NAME, SESSION_MAX_AGE_SECONDS } from '@/lib/auth';
 import { User } from '@/types';
 
 export async function POST(request: Request) {
@@ -18,7 +18,24 @@ export async function POST(request: Request) {
 
     const { email, password } = result.data;
     const usersCol = await getUsersCollection();
-    const user = await usersCol.findOne({ email: email.toLowerCase().trim() });
+    const cleanEmail = email.toLowerCase().trim();
+    let user = await usersCol.findOne({ email: cleanEmail });
+
+    // Support demo aliases
+    if (!user) {
+      const demoEmailMap: Record<string, string> = {
+        'meera.sharma@example.com': 'meera@carenest.local',
+        'sunita.care@example.com': 'sunita@carenest.local',
+        'rahul.sharma@example.com': 'rahul@carenest.local',
+        'meera@example.com': 'meera@carenest.local',
+        'sunita@example.com': 'sunita@carenest.local',
+        'rahul@example.com': 'rahul@carenest.local',
+      };
+      const alias = demoEmailMap[cleanEmail];
+      if (alias) {
+        user = await usersCol.findOne({ email: alias });
+      }
+    }
 
     if (!user || !user.passwordHash) {
       return NextResponse.json(
@@ -35,6 +52,13 @@ export async function POST(request: Request) {
       );
     }
 
+    const memCol = await getMembershipsCollection();
+    const activeMembership = await memCol.findOne({ userId: user._id, status: 'active' });
+    const householdId = activeMembership?.householdId || user.activeHouseholdId || (user as any).householdId || SEED_IDS.HOUSEHOLD_DEMO_MEERA;
+
+    // Create server-side session token in MongoDB sessions collection
+    const token = await createDBSession(user._id, householdId);
+
     const membershipsCol = await getCareMembershipsCollection();
     const memberships = await membershipsCol.find({
       userId: user._id,
@@ -45,31 +69,29 @@ export async function POST(request: Request) {
       _id: user._id,
       email: user.email,
       name: user.name,
-      role: user.role,
+      role: activeMembership?.role || user.role,
       phone: user.phone,
+      activeHouseholdId: householdId,
       createdAt: user.createdAt,
       updatedAt: user.updatedAt,
     };
 
-    const token = createSessionToken({
-      _id: user._id,
-      email: user.email,
-      role: user.role,
-    });
-
     const response = NextResponse.json({
       success: true,
       user: safeUser,
+      householdId,
       memberships,
       token,
     });
 
-    response.cookies.set(SESSION_COOKIE_NAME, token, {
+    response.cookies.set({
+      name: SESSION_COOKIE_NAME,
+      value: token,
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
       sameSite: 'lax',
-      maxAge: SESSION_MAX_AGE_SECONDS,
       path: '/',
+      maxAge: SESSION_MAX_AGE_SECONDS,
     });
 
     return response;

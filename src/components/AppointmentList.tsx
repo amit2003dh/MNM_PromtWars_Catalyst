@@ -157,7 +157,7 @@ export default function AppointmentList() {
             </button>
 
             <h3 className="text-xl font-black text-navy-950 mb-1">Schedule Doctor Visit</h3>
-            <p className="text-xs text-slate-500 mb-4">Add appointment to Meera-ji's calendar</p>
+            <p className="text-xs text-slate-500 mb-4">Add appointment to Meera-ji&apos;s calendar</p>
 
             <form onSubmit={handleSubmit} className="space-y-4">
               <div>
