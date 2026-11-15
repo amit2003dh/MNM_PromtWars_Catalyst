@@ -1,14 +1,23 @@
 import { NextResponse } from 'next/server';
-import { getSession } from '@/lib/auth/session';
+import { getSession, extractToken } from '@/lib/auth/session';
 
 export async function GET(request: Request) {
   try {
+    const token = await extractToken(request);
     const session = await getSession(request);
 
     if (!session) {
+      // If a token was provided but is invalid or expired, return 401
+      if (token) {
+        return NextResponse.json(
+          { authenticated: false, error: 'Unauthorized: Session invalid or expired' },
+          { status: 401 }
+        );
+      }
+      // If no token was provided, it is a normal unauthenticated visitor - return 200 without console error
       return NextResponse.json(
-        { authenticated: false, error: 'Unauthorized: No active session' },
-        { status: 401 }
+        { authenticated: false, user: null },
+        { status: 200 }
       );
     }
 
