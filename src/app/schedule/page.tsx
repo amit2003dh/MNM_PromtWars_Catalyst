@@ -86,27 +86,24 @@ export default function SchedulePage() {
               <button
                 type="button"
                 onClick={() => setFilterStatus('all')}
-                className={`px-2.5 py-1 rounded-lg transition-all ${
-                  filterStatus === 'all' ? 'bg-white text-navy-950 shadow-xs' : ''
-                }`}
+                className={`px-2.5 py-1 rounded-lg transition-all ${filterStatus === 'all' ? 'bg-white text-navy-950 shadow-xs' : ''
+                  }`}
               >
                 All
               </button>
               <button
                 type="button"
                 onClick={() => setFilterStatus('scheduled')}
-                className={`px-2.5 py-1 rounded-lg transition-all ${
-                  filterStatus === 'scheduled' ? 'bg-white text-navy-950 shadow-xs' : ''
-                }`}
+                className={`px-2.5 py-1 rounded-lg transition-all ${filterStatus === 'scheduled' ? 'bg-white text-navy-950 shadow-xs' : ''
+                  }`}
               >
                 Pending
               </button>
               <button
                 type="button"
                 onClick={() => setFilterStatus('taken')}
-                className={`px-2.5 py-1 rounded-lg transition-all ${
-                  filterStatus === 'taken' ? 'bg-white text-navy-950 shadow-xs' : ''
-                }`}
+                className={`px-2.5 py-1 rounded-lg transition-all ${filterStatus === 'taken' ? 'bg-white text-navy-950 shadow-xs' : ''
+                  }`}
               >
                 Taken
               </button>
