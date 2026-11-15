@@ -350,21 +350,21 @@ export default function DashboardPage() {
             </h1>
           </div>
 
-          <div className="flex items-center gap-3">
+          <div className="flex flex-wrap items-center gap-2 sm:gap-3 w-full sm:w-auto">
             <Link
               href="/reports"
-              className="px-4 py-2.5 rounded-2xl bg-white border border-slate-200 hover:border-nest-300 text-navy-900 text-xs font-bold shadow-xs flex items-center gap-2"
+              className="flex-1 sm:flex-initial px-3 sm:px-4 py-2 sm:py-2.5 rounded-2xl bg-white border border-slate-200 hover:border-nest-300 text-navy-900 text-xs font-bold shadow-xs flex items-center justify-center gap-2"
             >
-              <Sparkles className="w-4 h-4 text-nest-600" />
-              <span>AI Doctor Summary</span>
+              <Sparkles className="w-4 h-4 text-nest-600 shrink-0" />
+              <span className="truncate">AI Doctor Summary</span>
             </Link>
 
             <Link
               href="/schedule"
-              className="px-4 py-2.5 rounded-2xl bg-nest-600 hover:bg-nest-700 text-white text-xs font-bold shadow-xs flex items-center gap-2"
+              className="flex-1 sm:flex-initial px-3 sm:px-4 py-2 sm:py-2.5 rounded-2xl bg-nest-600 hover:bg-nest-700 text-white text-xs font-bold shadow-xs flex items-center justify-center gap-2"
             >
-              <CalendarCheck className="w-4 h-4" />
-              <span>Full Schedule</span>
+              <CalendarCheck className="w-4 h-4 shrink-0" />
+              <span className="truncate">Full Schedule</span>
             </Link>
           </div>
         </div>
@@ -428,11 +428,11 @@ export default function DashboardPage() {
                 </div>
 
                 {/* Status Tabs */}
-                <div className="flex rounded-xl bg-slate-100 p-1 text-xs font-bold text-slate-600">
+                <div className="grid grid-cols-3 sm:flex rounded-xl bg-slate-100 p-1 text-xs font-bold text-slate-600 w-full sm:w-auto text-center">
                   <button
                     type="button"
                     onClick={() => setActiveTab('all')}
-                    className={`px-3 py-1.5 rounded-lg transition-all ${
+                    className={`px-2.5 sm:px-3 py-1.5 rounded-lg transition-all truncate ${
                       activeTab === 'all' ? 'bg-white text-navy-950 shadow-xs' : 'hover:text-navy-950'
                     }`}
                   >
@@ -441,7 +441,7 @@ export default function DashboardPage() {
                   <button
                     type="button"
                     onClick={() => setActiveTab('pending')}
-                    className={`px-3 py-1.5 rounded-lg transition-all ${
+                    className={`px-2.5 sm:px-3 py-1.5 rounded-lg transition-all truncate ${
                       activeTab === 'pending' ? 'bg-white text-navy-950 shadow-xs' : 'hover:text-navy-950'
                     }`}
                   >
@@ -450,11 +450,11 @@ export default function DashboardPage() {
                   <button
                     type="button"
                     onClick={() => setActiveTab('completed')}
-                    className={`px-3 py-1.5 rounded-lg transition-all ${
+                    className={`px-2.5 sm:px-3 py-1.5 rounded-lg transition-all truncate ${
                       activeTab === 'completed' ? 'bg-white text-navy-950 shadow-xs' : 'hover:text-navy-950'
                     }`}
                   >
-                    Completed ({todayDoses.filter((d) => d.status === 'taken').length})
+                    Done ({todayDoses.filter((d) => d.status === 'taken').length})
                   </button>
                 </div>
               </div>

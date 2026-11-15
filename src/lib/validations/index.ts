@@ -74,7 +74,8 @@ export const AdministerDoseSchema = z.object({
 });
 
 export const HealthLogCreateSchema = z.object({
-  careProfileId: z.string().min(1, 'Care Profile ID required'),
+  careProfileId: z.string().optional(),
+  entryType: z.enum(['symptom', 'mood', 'vitals']).default('symptom'),
   symptom: z.enum([
     'dizziness',
     'weakness',
@@ -83,8 +84,15 @@ export const HealthLogCreateSchema = z.object({
     'stomach_discomfort',
     'feeling_fine',
     'other',
-  ]),
-  severity: z.enum(['mild', 'moderate', 'severe']),
+  ]).default('feeling_fine'),
+  severity: z.enum(['mild', 'moderate', 'severe']).default('mild'),
+  mood: z.enum(['great', 'good', 'neutral', 'tired', 'unwell']).optional(),
+  moodNotes: z.string().optional(),
+  vitals: z.object({
+    bloodPressure: z.string().optional(),
+    pulse: z.number().optional(),
+    bloodGlucose: z.number().optional(),
+  }).optional(),
   notes: z.string().optional(),
 });
 

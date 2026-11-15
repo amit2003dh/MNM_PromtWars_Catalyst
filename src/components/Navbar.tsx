@@ -8,7 +8,6 @@ import {
   ShieldAlert,
   UserCheck,
   Eye,
-  Bell,
   Menu,
   X,
   PhoneCall,
@@ -16,6 +15,15 @@ import {
   LogOut,
   LogIn,
   Home,
+  LayoutDashboard,
+  CalendarCheck2,
+  Pill,
+  Users2,
+  Calendar,
+  Activity,
+  FileSpreadsheet,
+  Settings,
+  ChevronRight,
 } from 'lucide-react';
 import { useCare } from '@/context/CareContext';
 import { UserRole } from '@/types';
@@ -28,6 +36,8 @@ export default function Navbar() {
     isAuthenticated,
     isDemoMode,
     careProfile,
+    todayDoses,
+    medications,
     seniorMode,
     setSeniorMode,
     switchUserRole,
@@ -40,63 +50,95 @@ export default function Navbar() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [roleDropdownOpen, setRoleDropdownOpen] = useState(false);
 
+  const pendingDosesCount = todayDoses.filter((d) => d.status === 'scheduled').length;
+  const lowStockCount = medications.filter((m) => m.remainingQuantity <= m.refillThreshold).length;
+
   const roles: { role: UserRole; label: string; desc: string; badge: string }[] = [
     { role: 'senior', label: 'Meera Sharma', desc: 'Senior Patient (74y)', badge: 'Senior Mode' },
     { role: 'caregiver', label: 'Sunita Verma', desc: 'Primary Caregiver', badge: 'Care Portal' },
     { role: 'family', label: 'Rahul Sharma', desc: 'Family Member (Son)', badge: 'Family Hub' },
   ];
 
+  const navLinks = [
+    { name: 'Overview', href: '/dashboard', icon: LayoutDashboard, badge: null },
+    {
+      name: 'Daily Schedule',
+      href: '/schedule',
+      icon: CalendarCheck2,
+      badge: pendingDosesCount > 0 ? `${pendingDosesCount} due` : null,
+      badgeColor: 'bg-amber-100 text-amber-800',
+    },
+    {
+      name: 'Medications',
+      href: '/medications',
+      icon: Pill,
+      badge: lowStockCount > 0 ? `${lowStockCount} low` : null,
+      badgeColor: 'bg-rose-100 text-rose-800 font-bold',
+    },
+    { name: 'Care Circle', href: '/care-circle', icon: Users2, badge: null },
+    { name: 'Appointments', href: '/appointments', icon: Calendar, badge: null },
+    { name: 'Health Journal', href: '/health-journal', icon: Activity, badge: null },
+    {
+      name: 'AI Doctor Report',
+      href: '/reports',
+      icon: FileSpreadsheet,
+      badge: 'AI',
+      badgeColor: 'bg-nest-100 text-nest-800 font-extrabold',
+    },
+    { name: 'Settings & Care', href: '/settings', icon: Settings, badge: null },
+  ];
+
   return (
     <header className="sticky top-0 z-40 w-full border-b border-slate-200/80 bg-white/95 backdrop-blur-md">
       {/* Emergency Global Banner if activated */}
       {emergencyAlertActive && (
-        <div className="bg-rose-600 text-white px-4 py-2.5 flex items-center justify-between text-sm md:text-base font-bold animate-pulse">
-          <div className="flex items-center gap-2 max-w-4xl mx-auto">
+        <div className="bg-rose-600 text-white px-3 py-2 sm:px-4 sm:py-2.5 flex items-center justify-between text-xs sm:text-sm md:text-base font-bold animate-pulse">
+          <div className="flex items-center gap-2 max-w-4xl mx-auto min-w-0">
             <ShieldAlert className="w-5 h-5 shrink-0" />
-            <span>
-              EMERGENCY ASSISTANCE REQUESTED FOR {careProfile.fullName.toUpperCase()}! Care circle notified.
+            <span className="truncate">
+              EMERGENCY ASSISTANCE REQUESTED FOR {careProfile.fullName.toUpperCase()}!
             </span>
           </div>
           <button
             type="button"
             onClick={clearEmergencyAlert}
-            className="text-xs bg-white text-rose-700 px-3 py-1 rounded-full font-bold hover:bg-rose-50 ml-4 shrink-0"
+            className="text-[11px] sm:text-xs bg-white text-rose-700 px-2.5 py-1 rounded-full font-bold hover:bg-rose-50 ml-2 shrink-0"
           >
-            Acknowledge & Dismiss
+            Dismiss
           </button>
         </div>
       )}
 
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between h-16 md:h-20">
-          {/* Logo & Brand */}
-          <div className="flex items-center gap-3">
+          {/* Logo & Brand (compact on small mobile, never overflows) */}
+          <div className="flex items-center gap-2 sm:gap-3 shrink-0">
             <Link
               href="/"
-              className="flex items-center gap-2.5 group focus:outline-none focus:ring-2 focus:ring-nest-500 rounded-xl p-1"
+              className="flex items-center gap-2 sm:gap-2.5 group focus:outline-none focus:ring-2 focus:ring-nest-500 rounded-xl p-1"
             >
-              <div className="w-10 h-10 md:w-11 md:h-11 rounded-2xl bg-gradient-to-tr from-nest-600 to-nest-400 flex items-center justify-center text-white shadow-md shadow-nest-600/20 group-hover:scale-105 transition-transform">
-                <HeartHandshake className="w-6 h-6 md:w-7 md:h-7" />
+              <div className="w-9 h-9 sm:w-10 sm:h-10 md:w-11 md:h-11 rounded-2xl bg-gradient-to-tr from-nest-600 to-nest-400 flex items-center justify-center text-white shadow-md shadow-nest-600/20 group-hover:scale-105 transition-transform shrink-0">
+                <HeartHandshake className="w-5 h-5 sm:w-6 sm:h-6 md:w-7 md:h-7" />
               </div>
               <div className="flex flex-col">
-                <span className="text-xl md:text-2xl font-black tracking-tight text-navy-950 flex items-center gap-1">
-                  CareNest<span className="text-nest-600 font-extrabold text-sm md:text-base ml-0.5">AI</span>
+                <span className="text-lg sm:text-xl md:text-2xl font-black tracking-tight text-navy-950 flex items-center">
+                  CareNest<span className="text-nest-600 font-extrabold text-xs sm:text-sm md:text-base ml-0.5">AI</span>
                 </span>
                 <span className="text-[10px] md:text-xs font-semibold text-slate-500 tracking-wider uppercase -mt-1 hidden sm:block">
-                  Elderly Care & Medication Safety
+                  Elderly Care & Safety
                 </span>
               </div>
             </Link>
 
-            {/* Current Care Profile Pill */}
+            {/* Current Care Profile Pill (desktop only) */}
             <div className="hidden xl:flex items-center gap-2 px-3 py-1 bg-nest-50/80 border border-nest-200/80 rounded-full text-xs text-nest-900 font-medium">
               <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
               <span>Caring for: <strong>{careProfile.fullName} ({careProfile.age}y)</strong></span>
             </div>
           </div>
 
-          {/* Right Controls: Senior Mode Toggle, Role Switcher, Emergency Button */}
-          <div className="flex items-center gap-2 sm:gap-4">
+          {/* Right Controls: Desktop View */}
+          <div className="hidden md:flex items-center gap-2 sm:gap-3">
             {/* Senior Care Mode Toggle */}
             <button
               type="button"
@@ -109,7 +151,7 @@ export default function Navbar() {
               title="Toggle Extra-Large Senior Mode"
             >
               <Eye className={`w-4 h-4 md:w-5 md:h-5 ${seniorMode ? 'text-amber-800' : 'text-slate-500'}`} />
-              <span className="hidden sm:inline">Senior Mode</span>
+              <span className="hidden lg:inline">Senior Mode</span>
               <span
                 className={`text-[10px] px-1.5 py-0.5 rounded-full font-extrabold uppercase ${
                   seniorMode ? 'bg-amber-300 text-amber-950' : 'bg-slate-300/80 text-slate-700'
@@ -154,8 +196,7 @@ export default function Navbar() {
                     className="flex items-center gap-2 px-3 py-1.5 md:px-3.5 md:py-2 rounded-2xl bg-white border border-slate-200 hover:border-slate-300 text-slate-800 text-xs md:text-sm font-semibold shadow-xs"
                   >
                     <UserCheck className="w-4 h-4 text-nest-600" />
-                    <span className="hidden sm:inline font-bold">{user.name}</span>
-                    <span className="sm:hidden font-bold">{user.role}</span>
+                    <span className="font-bold">{user.name}</span>
                     <span className="text-[10px] px-1.5 py-0.5 bg-amber-100 text-amber-800 rounded-md uppercase font-bold">
                       Demo
                     </span>
@@ -221,129 +262,221 @@ export default function Navbar() {
               </Link>
             )}
 
-            {/* Emergency Button */}
+            {/* Desktop Emergency Button */}
             <button
               type="button"
               onClick={triggerEmergency}
-              className="flex items-center gap-1.5 px-3 py-1.5 md:px-4 md:py-2 rounded-2xl bg-rose-600 hover:bg-rose-700 active:scale-95 text-white font-black text-xs md:text-sm shadow-md shadow-rose-600/20 transition-all"
+              className="flex items-center gap-1.5 px-3 py-1.5 md:px-4 md:py-2 rounded-2xl bg-rose-600 hover:bg-rose-700 active:scale-95 text-white font-black text-xs md:text-sm shadow-md shadow-rose-600/20 transition-all shrink-0"
               title="One-touch Emergency Call"
             >
               <PhoneCall className="w-4 h-4" />
-              <span className="hidden sm:inline">SOS Help</span>
+              <span>SOS Help</span>
+            </button>
+          </div>
+
+          {/* Right Controls: Mobile View (< md) - Compact & Zero Overflow */}
+          <div className="flex md:hidden items-center gap-2">
+            {/* Quick Emergency Icon Button */}
+            <button
+              type="button"
+              onClick={triggerEmergency}
+              className="w-9 h-9 rounded-xl bg-rose-600 text-white flex items-center justify-center shadow-md active:scale-95 shrink-0"
+              title="One-touch Emergency SOS"
+              aria-label="Emergency SOS"
+            >
+              <PhoneCall className="w-4 h-4 animate-pulse" />
             </button>
 
-            {/* Mobile Nav Toggle */}
+            {/* Active User Avatar Pill */}
+            <div
+              onClick={() => setMobileMenuOpen(true)}
+              className="flex items-center gap-1.5 px-2 py-1 rounded-xl bg-slate-100 border border-slate-200 text-xs font-bold text-slate-800 cursor-pointer"
+            >
+              <div className="w-5 h-5 rounded-full bg-nest-600 text-white flex items-center justify-center text-[10px]">
+                {user.name.charAt(0)}
+              </div>
+              <span className="text-[10px] text-slate-500 font-extrabold uppercase">
+                {isDemoMode ? 'DEMO' : 'ACTIVE'}
+              </span>
+            </div>
+
+            {/* Mobile Hamburger Toggle Button */}
             <button
               type="button"
               onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-              className="md:hidden p-2 text-slate-600 hover:text-slate-900 rounded-xl hover:bg-slate-100"
+              className="w-9 h-9 flex items-center justify-center text-slate-700 hover:text-slate-950 rounded-xl bg-white border border-slate-200 shadow-xs"
               aria-label="Toggle Navigation Menu"
             >
-              {mobileMenuOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
+              {mobileMenuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
             </button>
           </div>
         </div>
       </div>
 
-      {/* Mobile Drawer Navigation */}
+      {/* Mobile Full-Screen Navigation Drawer Overlay */}
       {mobileMenuOpen && (
-        <div className="md:hidden border-t border-slate-200 bg-white px-4 pt-3 pb-6 space-y-2">
-          <Link
-            href="/dashboard"
-            onClick={() => setMobileMenuOpen(false)}
-            className={`block px-3 py-2.5 rounded-xl font-bold text-sm ${
-              pathname === '/dashboard' ? 'bg-nest-100 text-nest-900' : 'text-slate-700 hover:bg-slate-50'
-            }`}
-          >
-            Dashboard
-          </Link>
-          <Link
-            href="/schedule"
-            onClick={() => setMobileMenuOpen(false)}
-            className={`block px-3 py-2.5 rounded-xl font-bold text-sm ${
-              pathname === '/schedule' ? 'bg-nest-100 text-nest-900' : 'text-slate-700 hover:bg-slate-50'
-            }`}
-          >
-            Today's Schedule & Doses
-          </Link>
-          <Link
-            href="/medications"
-            onClick={() => setMobileMenuOpen(false)}
-            className={`block px-3 py-2.5 rounded-xl font-bold text-sm ${
-              pathname === '/medications' ? 'bg-nest-100 text-nest-900' : 'text-slate-700 hover:bg-slate-50'
-            }`}
-          >
-            Medication Cabinet
-          </Link>
-          <Link
-            href="/care-circle"
-            onClick={() => setMobileMenuOpen(false)}
-            className={`block px-3 py-2.5 rounded-xl font-bold text-sm ${
-              pathname === '/care-circle' ? 'bg-nest-100 text-nest-900' : 'text-slate-700 hover:bg-slate-50'
-            }`}
-          >
-            Care Circle & Passcode
-          </Link>
-          <Link
-            href="/appointments"
-            onClick={() => setMobileMenuOpen(false)}
-            className={`block px-3 py-2.5 rounded-xl font-bold text-sm ${
-              pathname === '/appointments' ? 'bg-nest-100 text-nest-900' : 'text-slate-700 hover:bg-slate-50'
-            }`}
-          >
-            Doctor Appointments
-          </Link>
-          <Link
-            href="/health-journal"
-            onClick={() => setMobileMenuOpen(false)}
-            className={`block px-3 py-2.5 rounded-xl font-bold text-sm ${
-              pathname === '/health-journal' ? 'bg-nest-100 text-nest-900' : 'text-slate-700 hover:bg-slate-50'
-            }`}
-          >
-            Health Journal & Symptoms
-          </Link>
-          <Link
-            href="/reports"
-            onClick={() => setMobileMenuOpen(false)}
-            className={`block px-3 py-2.5 rounded-xl font-bold text-sm ${
-              pathname === '/reports' ? 'bg-nest-100 text-nest-900' : 'text-slate-700 hover:bg-slate-50'
-            }`}
-          >
-            AI Doctor Summary
-          </Link>
-          <Link
-            href="/settings"
-            onClick={() => setMobileMenuOpen(false)}
-            className={`block px-3 py-2.5 rounded-xl font-bold text-sm ${
-              pathname === '/settings' ? 'bg-nest-100 text-nest-900' : 'text-slate-700 hover:bg-slate-50'
-            }`}
-          >
-            Settings & Accessibility
-          </Link>
+        <div className="md:hidden fixed inset-x-0 top-16 bottom-0 z-50 bg-navy-950/40 backdrop-blur-xs flex flex-col justify-start">
+          <div className="bg-white border-b border-slate-200 shadow-2xl max-h-[calc(100vh-4rem)] overflow-y-auto p-4 space-y-4 animate-in slide-in-from-top-4 duration-200">
+            {/* 1. Active Persona & Household Header */}
+            <div className="p-3.5 rounded-2xl bg-slate-50 border border-slate-200 space-y-2.5">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-10 h-10 rounded-xl bg-nest-600 text-white font-black flex items-center justify-center text-base shadow-xs">
+                    {user.name.charAt(0)}
+                  </div>
+                  <div>
+                    <h3 className="font-bold text-navy-950 text-sm leading-tight">{user.name}</h3>
+                    <p className="text-[11px] text-slate-500 font-semibold capitalize">
+                      {user.role === 'caregiver' ? 'Primary Caregiver' : user.role === 'senior' ? 'Senior Patient' : 'Family Member'}
+                    </p>
+                  </div>
+                </div>
+                <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded-md bg-emerald-100 text-emerald-800">
+                  {isDemoMode ? 'Demo Mode' : 'Signed In'}
+                </span>
+              </div>
 
-          <div className="pt-3 border-t border-slate-200 mt-2 space-y-2">
-            {isAuthenticated && !isDemoMode ? (
-              <button
-                type="button"
-                onClick={() => {
-                  setMobileMenuOpen(false);
-                  logout();
-                }}
-                className="w-full flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl bg-rose-50 text-rose-700 font-bold text-sm hover:bg-rose-100 transition-colors"
-              >
-                <LogOut className="w-4 h-4" />
-                <span>Sign Out ({user.name})</span>
-              </button>
-            ) : (
-              <Link
-                href="/login"
-                onClick={() => setMobileMenuOpen(false)}
-                className="w-full flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl bg-nest-600 text-white font-bold text-sm hover:bg-nest-700 transition-colors"
-              >
-                <LogIn className="w-4 h-4" />
-                <span>Sign In with Gmail</span>
-              </Link>
+              {/* Household Pill */}
+              <div className="text-[11px] text-nest-800 bg-white border border-nest-200 px-2.5 py-1 rounded-xl font-bold flex items-center gap-1.5">
+                <Home className="w-3.5 h-3.5 text-nest-600 shrink-0" />
+                <span className="truncate">{household?.name || (isDemoMode ? 'Demo: Sharma Family' : 'Care Household')}</span>
+              </div>
+            </div>
+
+            {/* 2. Switch Demo Persona (1-Tap Buttons) */}
+            {isDemoMode && (
+              <div className="space-y-1.5">
+                <div className="text-[11px] font-bold text-slate-400 uppercase tracking-wider px-1">
+                  Switch Active Persona
+                </div>
+                <div className="grid grid-cols-3 gap-1.5">
+                  {roles.map((r) => (
+                    <button
+                      key={r.role}
+                      type="button"
+                      onClick={() => {
+                        switchUserRole(r.role);
+                        setMobileMenuOpen(false);
+                      }}
+                      className={`p-2 rounded-xl text-center text-xs font-bold transition-all border ${
+                        user.role === r.role
+                          ? 'bg-nest-600 text-white border-nest-600 shadow-sm'
+                          : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'
+                      }`}
+                    >
+                      <div className="truncate">{r.label.split(' ')[0]}</div>
+                      <div className={`text-[9px] truncate ${user.role === r.role ? 'text-nest-100' : 'text-slate-400'}`}>
+                        {r.badge}
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              </div>
             )}
+
+            {/* 3. Senior Mode Large Switch */}
+            <button
+              type="button"
+              onClick={() => setSeniorMode(!seniorMode)}
+              className={`w-full flex items-center justify-between p-3.5 rounded-2xl font-bold text-sm transition-all border ${
+                seniorMode
+                  ? 'bg-amber-100 text-amber-950 border-amber-300 ring-2 ring-amber-400/50 shadow-sm'
+                  : 'bg-slate-100/90 hover:bg-slate-200 text-slate-800 border-slate-200'
+              }`}
+            >
+              <div className="flex items-center gap-2.5">
+                <Eye className={`w-5 h-5 ${seniorMode ? 'text-amber-800' : 'text-slate-600'}`} />
+                <span>Senior Care Mode</span>
+              </div>
+              <span
+                className={`text-xs px-2.5 py-1 rounded-full font-extrabold uppercase ${
+                  seniorMode ? 'bg-amber-300 text-amber-950' : 'bg-slate-300 text-slate-700'
+                }`}
+              >
+                {seniorMode ? 'Active ON' : 'Turn ON'}
+              </span>
+            </button>
+
+            {/* 4. Complete Mobile Navigation Links */}
+            <div className="space-y-1">
+              <div className="text-[11px] font-bold text-slate-400 uppercase tracking-wider px-1">
+                Navigation Menu
+              </div>
+              <nav className="space-y-1" aria-label="Mobile navigation">
+                {navLinks.map((item) => {
+                  const Icon = item.icon;
+                  const isActive = pathname === item.href;
+                  return (
+                    <Link
+                      key={item.name}
+                      href={item.href}
+                      onClick={() => setMobileMenuOpen(false)}
+                      className={`flex items-center justify-between px-3.5 py-2.5 rounded-xl text-sm font-bold transition-all ${
+                        isActive
+                          ? 'bg-nest-600 text-white shadow-sm'
+                          : 'text-slate-700 hover:text-navy-950 hover:bg-slate-50'
+                      }`}
+                    >
+                      <div className="flex items-center gap-3">
+                        <Icon className={`w-4 h-4 ${isActive ? 'text-white' : 'text-slate-400'}`} />
+                        <span>{item.name}</span>
+                      </div>
+                      <div className="flex items-center gap-1.5">
+                        {item.badge && (
+                          <span
+                            className={`text-[10px] px-2 py-0.5 rounded-full ${
+                              isActive ? 'bg-white/20 text-white' : item.badgeColor
+                            }`}
+                          >
+                            {item.badge}
+                          </span>
+                        )}
+                        <ChevronRight className={`w-4 h-4 ${isActive ? 'text-white' : 'text-slate-300'}`} />
+                      </div>
+                    </Link>
+                  );
+                })}
+              </nav>
+            </div>
+
+            {/* 5. Emergency SOS Full-Width Button */}
+            <button
+              type="button"
+              onClick={() => {
+                setMobileMenuOpen(false);
+                triggerEmergency();
+              }}
+              className="w-full py-3.5 px-4 rounded-2xl bg-rose-600 hover:bg-rose-700 active:scale-95 text-white font-black text-sm shadow-md flex items-center justify-center gap-2"
+            >
+              <PhoneCall className="w-4 h-4" />
+              <span>EMERGENCY SOS ASSISTANCE</span>
+            </button>
+
+            {/* 6. Sign In / Sign Out */}
+            <div className="pt-2 border-t border-slate-100">
+              {isAuthenticated && !isDemoMode ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setMobileMenuOpen(false);
+                    logout();
+                  }}
+                  className="w-full flex items-center justify-center gap-2 py-2.5 px-3 rounded-xl bg-slate-100 hover:bg-rose-50 text-slate-700 hover:text-rose-700 font-bold text-xs transition-colors"
+                >
+                  <LogOut className="w-4 h-4" />
+                  <span>Sign Out of Account</span>
+                </button>
+              ) : (
+                <Link
+                  href="/login"
+                  onClick={() => setMobileMenuOpen(false)}
+                  className="w-full flex items-center justify-center gap-2 py-2.5 px-3 rounded-xl bg-nest-50 hover:bg-nest-100 text-nest-800 border border-nest-200 font-bold text-xs transition-colors"
+                >
+                  <LogIn className="w-4 h-4 text-nest-600" />
+                  <span>Sign In with Gmail OTP</span>
+                </Link>
+              )}
+            </div>
           </div>
         </div>
       )}

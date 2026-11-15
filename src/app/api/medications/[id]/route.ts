@@ -73,6 +73,18 @@ export async function PUT(request: Request, context: RouteContext) {
     }
 
     const data = result.data;
+
+    // Consent-based rule: Caregivers cannot bypass approval or reactivate stopped medications
+    if (data.status === 'active' && existing.status !== 'active') {
+      const isCaregiver = ['CAREGIVER', 'PRIMARY_CAREGIVER'].includes((auth.role || '').toUpperCase());
+      if (isCaregiver) {
+        return NextResponse.json(
+          { error: 'Forbidden: Caregivers cannot reactivate or approve medications without elder consent' },
+          { status: 403 }
+        );
+      }
+    }
+
     const now = new Date().toISOString();
     const updates: Record<string, any> = {
       ...data,

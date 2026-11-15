@@ -114,6 +114,22 @@ export interface CareMembership {
   userName?: string;
 }
 
+export type MoodType = 'great' | 'good' | 'neutral' | 'tired' | 'unwell';
+
+export interface AdherenceMetrics {
+  adherence7Day: number;
+  adherence30Day: number;
+  perfectStreakDays: number;
+  missedPatterns: {
+    morning: number;
+    afternoon: number;
+    evening: number;
+    night: number;
+  };
+  totalScheduled7d: number;
+  totalTaken7d: number;
+}
+
 export interface Medication {
   _id: string;
   householdId?: string;
@@ -133,9 +149,17 @@ export interface Medication {
   refillThreshold: number;
   startDate: string; // ISO date
   endDate?: string;
-  status: 'active' | 'discontinued' | 'tapered' | 'completed';
+  status: 'active' | 'pending_approval' | 'rejected' | 'discontinued' | 'tapered' | 'completed';
   reconciliationStatus?: 'CONTINUE' | 'MODIFIED' | 'DISCONTINUED' | 'TAPERED';
   reconciliationNotes?: string;
+  // CareCircle Elder Consent Fields
+  submittedBy?: string;
+  submittedByName?: string;
+  submittedByRole?: string;
+  approvedBy?: string;
+  approvedByName?: string;
+  approvedAt?: string;
+  rejectionReason?: string;
   createdBy: string;
   createdAt: string;
   updatedAt: string;
@@ -174,8 +198,16 @@ export interface HealthLog {
   _id: string;
   householdId?: string;
   careProfileId: string;
+  entryType?: 'symptom' | 'mood' | 'vitals';
   symptom: SymptomType;
   severity: 'mild' | 'moderate' | 'severe';
+  mood?: MoodType;
+  moodNotes?: string;
+  vitals?: {
+    bloodPressure?: string;
+    pulse?: number;
+    bloodGlucose?: number;
+  };
   notes?: string;
   reportedBy: string;
   reportedByName?: string;
@@ -201,7 +233,8 @@ export interface NotificationRecord {
   recipientId?: string;
   title: string;
   message: string;
-  type: 'refill' | 'missed_dose' | 'symptom_alert' | 'appointment' | 'general';
+  type: 'refill' | 'missed_dose' | 'symptom_alert' | 'appointment' | 'general' | 'appointment_reminder' | 'pending_approval';
+  deliveryStatus?: 'sent_email' | 'outbox_preview' | 'in_app';
   priority: 'low' | 'medium' | 'high' | 'urgent';
   stage?: 1 | 2 | 3;
   status: 'unread' | 'read' | 'dismissed';

@@ -88,9 +88,13 @@ export async function POST(request: Request) {
     const newLog: HealthLog = {
       _id: logId,
       householdId: auth.householdId,
-      careProfileId: data.careProfileId,
+      careProfileId: data.careProfileId || profile._id,
+      entryType: data.entryType || (data.mood ? 'mood' : 'symptom'),
       symptom: data.symptom,
       severity: data.severity,
+      mood: data.mood,
+      moodNotes: data.moodNotes,
+      vitals: data.vitals,
       notes: data.notes,
       reportedBy: auth.user._id,
       reportedByName: auth.user.name,
@@ -100,17 +104,21 @@ export async function POST(request: Request) {
     const healthLogsCol = await getHealthLogsCollection();
     await healthLogsCol.insertOne(newLog);
 
-    // Auto-create high-priority circle notification for concerning symptoms
-    if (['dizziness', 'weakness', 'confusion', 'stomach_discomfort'].includes(data.symptom)) {
+    // Auto-create high-priority circle notification for concerning symptoms or low mood
+    if (['dizziness', 'weakness', 'confusion', 'stomach_discomfort'].includes(data.symptom) || data.mood === 'unwell') {
       const notifsCol = await getNotificationsCollection();
       const alertNotif: NotificationRecord = {
         _id: `notif_${Date.now()}_symptom`,
         householdId: auth.householdId,
-        careProfileId: data.careProfileId,
-        title: `Health Alert: ${data.symptom.replace('_', ' ').toUpperCase()} reported by ${auth.user.name}`,
-        message: `Severity: ${data.severity.toUpperCase()}. Notes: ${data.notes || 'None specified'}. Care circle notified.`,
+        careProfileId: newLog.careProfileId,
+        title: data.mood === 'unwell' 
+          ? `Mood Check-In Alert: Low wellbeing reported by ${auth.user.name}`
+          : `Health Alert: ${data.symptom.replace('_', ' ').toUpperCase()} reported by ${auth.user.name}`,
+        message: data.mood === 'unwell'
+          ? `Note: ${data.moodNotes || data.notes || 'Feeling unwell'}. Please check in.`
+          : `Severity: ${data.severity.toUpperCase()}. Notes: ${data.notes || 'None specified'}. Care circle notified.`,
         type: 'symptom_alert',
-        priority: data.severity === 'severe' ? 'urgent' : 'high',
+        priority: data.severity === 'severe' || data.mood === 'unwell' ? 'urgent' : 'high',
         status: 'unread',
         sentViaEmail: false,
         createdAt: now,
@@ -120,16 +128,18 @@ export async function POST(request: Request) {
 
     await logAudit({
       householdId: auth.householdId,
-      careProfileId: data.careProfileId,
+      careProfileId: newLog.careProfileId,
       actorId: auth.user._id,
       actorName: auth.user.name,
       actorRole: auth.role || 'OWNER',
-      action: 'LOG_SYMPTOM',
+      action: data.mood ? 'LOG_MOOD' : 'LOG_SYMPTOM',
       entityType: 'healthLog',
       entityId: logId,
       details: {
+        entryType: newLog.entryType,
         symptom: data.symptom,
         severity: data.severity,
+        mood: data.mood,
       },
     });
 

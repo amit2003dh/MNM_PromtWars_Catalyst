@@ -7,11 +7,15 @@
   --foreground: #0f172a;
 }
 
+html,
 body {
   color: var(--foreground);
   background: var(--background);
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
   -webkit-font-smoothing: antialiased;
+  overflow-x: clip;
+  max-width: 100%;
+  width: 100%;
 }
 
 /* Accessibility high-contrast focus rings */
@@ -30,4 +34,18 @@ body {
 .senior-mode a,
 .senior-mode input {
   min-height: 64px;
+}
+
+/* Print Styles for AI Doctor Summary & Emergency Medical Cards */
+@media print {
+  body {
+    background: #ffffff !important;
+    color: #000000 !important;
+  }
+  header, aside, .print\\:hidden, [role="dialog"] {
+    display: none !important;
+  }
+  .print\\:block {
+    display: block !important;
+  }
 }

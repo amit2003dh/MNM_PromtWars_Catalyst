@@ -82,7 +82,7 @@ export default function Sidebar() {
   ];
 
   return (
-    <aside className="hidden md:flex flex-col w-64 xl:w-72 bg-white border-r border-slate-200/80 min-h-[calc(100vh-4rem)] p-4 shrink-0 justify-between">
+    <aside className="hidden md:flex flex-col w-64 xl:w-72 bg-white border-r border-slate-200/80 sticky top-16 md:top-20 h-[calc(100vh-4rem)] md:h-[calc(100vh-5rem)] self-start overflow-y-auto p-4 shrink-0 justify-between z-30">
       <div className="space-y-6">
         {/* User Card */}
         <div className="p-3.5 rounded-2xl bg-slate-50 border border-slate-200/80 space-y-2">

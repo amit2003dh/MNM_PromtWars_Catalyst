@@ -89,7 +89,7 @@ export default function CareCirclePage() {
             </p>
           </div>
 
-          <div className="flex items-center gap-3 bg-white px-5 py-3 rounded-2xl border-2 border-nest-400 shadow-sm">
+          <div className="flex items-center justify-between sm:justify-start gap-3 bg-white px-3 sm:px-5 py-3 rounded-2xl border-2 border-nest-400 shadow-sm w-full sm:w-auto">
             <span className="font-mono text-xl font-black tracking-widest text-navy-950">
               {inviteCode}
             </span>

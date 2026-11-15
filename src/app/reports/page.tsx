@@ -94,7 +94,7 @@ ${medications
         {/* Header */}
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 pb-2 border-b border-slate-200/80 print:hidden">
           <div>
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
               <span className="text-xs font-black uppercase tracking-wider text-purple-800 bg-purple-100 px-2.5 py-0.5 rounded-full flex items-center gap-1">
                 <Sparkles className="w-3.5 h-3.5" />
                 Gemini AI Clinical Summaries
@@ -109,7 +109,7 @@ ${medications
             </h1>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
             <button
               type="button"
               onClick={handlePrint}

@@ -92,6 +92,9 @@ export async function POST(request: Request) {
     const now = new Date().toISOString();
     const medId = `med_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
 
+    const isCaregiver = ['CAREGIVER', 'PRIMARY_CAREGIVER'].includes((auth.role || '').toUpperCase());
+    const initialStatus = isCaregiver ? 'pending_approval' : (data.status || 'active');
+
     const newMedication: Medication = {
       _id: medId,
       householdId: auth.householdId,
@@ -111,9 +114,15 @@ export async function POST(request: Request) {
       refillThreshold: data.refillThreshold,
       startDate: data.startDate || now.split('T')[0],
       endDate: data.endDate,
-      status: data.status || 'active',
+      status: initialStatus,
       reconciliationStatus: data.reconciliationStatus || 'CONTINUE',
       reconciliationNotes: data.reconciliationNotes,
+      submittedBy: isCaregiver ? auth.user._id : undefined,
+      submittedByName: isCaregiver ? auth.user.name : undefined,
+      submittedByRole: isCaregiver ? auth.role : undefined,
+      approvedBy: !isCaregiver ? auth.user._id : undefined,
+      approvedByName: !isCaregiver ? auth.user.name : undefined,
+      approvedAt: !isCaregiver ? now : undefined,
       createdBy: auth.user._id,
       createdAt: now,
       updatedAt: now,
@@ -140,21 +149,53 @@ export async function POST(request: Request) {
       await notifsCol.insertOne(refillNotif);
     }
 
-    await logAudit({
-      householdId: auth.householdId,
-      careProfileId: newMedication.careProfileId,
-      actorId: auth.user._id,
-      actorName: auth.user.name,
-      actorRole: auth.role || 'OWNER',
-      action: 'ADD_MEDICATION',
-      entityType: 'medication',
-      entityId: medId,
-      details: {
-        medicineName: data.medicineName,
-        dosage: data.dosage,
-        totalQuantity: data.totalQuantity,
-      },
-    });
+    if (isCaregiver) {
+      const notifsCol = await getNotificationsCollection();
+      await notifsCol.insertOne({
+        _id: `notif_${Date.now()}_approval`,
+        householdId: auth.householdId,
+        careProfileId: newMedication.careProfileId,
+        title: `Prescription Consent Required: ${newMedication.medicineName}`,
+        message: `Caregiver ${auth.user.name} submitted ${newMedication.medicineName} (${newMedication.dosage}) for elder consent.`,
+        type: 'pending_approval',
+        priority: 'high',
+        status: 'unread',
+        deliveryStatus: 'in_app',
+        sentViaEmail: false,
+        createdAt: now,
+      });
+
+      await logAudit({
+        householdId: auth.householdId,
+        careProfileId: newMedication.careProfileId,
+        actorId: auth.user._id,
+        actorName: auth.user.name,
+        actorRole: auth.role || 'CAREGIVER',
+        action: 'SUBMIT_MEDICATION_FOR_APPROVAL',
+        entityType: 'medication',
+        entityId: medId,
+        details: {
+          medicineName: data.medicineName,
+          dosage: data.dosage,
+        },
+      });
+    } else {
+      await logAudit({
+        householdId: auth.householdId,
+        careProfileId: newMedication.careProfileId,
+        actorId: auth.user._id,
+        actorName: auth.user.name,
+        actorRole: auth.role || 'OWNER',
+        action: 'ADD_MEDICATION',
+        entityType: 'medication',
+        entityId: medId,
+        details: {
+          medicineName: data.medicineName,
+          dosage: data.dosage,
+          totalQuantity: data.totalQuantity,
+        },
+      });
+    }
 
     return NextResponse.json({ success: true, medication: newMedication }, { status: 201 });
   } catch (err: any) {

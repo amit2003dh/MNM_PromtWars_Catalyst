@@ -130,5 +130,26 @@ export function canManageAppointments(role?: HouseholdRole | CareMemberRole | Us
 export function canManageHousehold(role?: HouseholdRole | CareMemberRole | UserRole | string): boolean {
   if (!role) return false;
   const normalized = role.toUpperCase();
-  return ['OWNER'].includes(normalized);
+  return ['OWNER', 'SENIOR'].includes(normalized);
+}
+
+/**
+ * Checks whether a role can approve or reject pending medication submissions.
+ * Only the elder (SENIOR) or household OWNER can grant consent.
+ * Caregivers CANNOT approve medication submissions.
+ */
+export function canApproveMedication(role?: HouseholdRole | CareMemberRole | UserRole | string): boolean {
+  if (!role) return false;
+  const normalized = role.toUpperCase();
+  return ['SENIOR', 'OWNER'].includes(normalized);
+}
+
+/**
+ * Checks whether a role can manage household members (invite, remove, permissions).
+ * Only the elder or authorized owner is permitted.
+ */
+export function canManageCareCircleMembers(role?: HouseholdRole | CareMemberRole | UserRole | string): boolean {
+  if (!role) return false;
+  const normalized = role.toUpperCase();
+  return ['OWNER', 'SENIOR'].includes(normalized);
 }

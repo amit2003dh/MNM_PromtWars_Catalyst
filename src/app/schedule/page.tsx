@@ -76,7 +76,7 @@ export default function SchedulePage() {
           </div>
 
           {/* Date pill & Filter */}
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
             <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-white border border-slate-200 text-xs font-bold text-navy-900 shadow-xs">
               <Clock className="w-3.5 h-3.5 text-nest-600" />
               <span>{todayDateString}</span>
