@@ -177,3 +177,21 @@ export interface ScheduleItem {
   recordedAt?: string;
   remainingQuantity: number;
 }
+
+export interface User {
+  _id: string;
+  email: string;
+  name: string;
+  role: UserRole;
+  phone?: string;
+  passwordHash?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface AuthSession {
+  user: User;
+  memberships: CareMembership[];
+  activeProfile?: CareProfile;
+}
+

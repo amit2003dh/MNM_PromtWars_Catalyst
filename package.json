@@ -7,7 +7,9 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
-    "seed": "node scripts/seed.mjs"
+    "seed": "node scripts/seed.mjs",
+    "test": "node --import ./tests/helpers/register.mjs --test tests/*.test.mjs",
+    "test:e2e": "node scripts/test-e2e.mjs"
   },
   "dependencies": {
     "@google/generative-ai": "^0.24.1",
@@ -29,6 +31,7 @@
     "@types/node": "^22.13.4",
     "@types/react": "^19.0.8",
     "@types/react-dom": "^19.0.3",
+    "autoprefixer": "^10.6.2",
     "eslint": "^9.20.1",
     "eslint-config-next": "^15.1.7",
     "postcss": "^8.5.2",
